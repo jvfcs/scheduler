@@ -34,27 +34,37 @@
 
         .staff-pool-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 15px; display: flex; gap: 10px; overflow-x: auto; min-height: 60px; }
         .scheduler-grid { display: grid; grid-template-columns: 150px repeat(7, 1fr); gap: 1px; background: var(--border-color); border: 1px solid var(--border-color); }
-        .scheduler-header, .scheduler-cell { background: var(--card-bg); padding: 8px; min-height: 110px; display: flex; flex-direction: column; }
-        .scheduler-header { font-weight: bold; text-align: center; background: var(--brand-grey); color: white; min-height: 40px; justify-content: center;}
+        
+        .scheduler-header { font-weight: bold; text-align: center; background: var(--brand-grey); color: white; min-height: 40px; display: flex; flex-direction: column; justify-content: center; padding: 8px;}
         .shift-label { font-weight: bold; display: flex; flex-direction: column; justify-content: center; background: var(--card-bg); border-right: 2px solid var(--border-color); padding-left: 10px;}
+        
+        /* Updated Cell and Sub-grid CSS */
+        .scheduler-cell { background: var(--card-bg); min-height: 110px; display: flex; flex-direction: column; padding: 0; }
+        
+        .slot-zone { 
+            flex-grow: 1; border-bottom: 1px solid var(--border-color); padding: 4px; 
+            display: flex; flex-direction: column; gap: 4px; min-height: 50px;
+        }
+        .slot-zone:last-of-type { border-bottom: none; }
+        .slot-label { font-size: 0.65rem; color: var(--brand-grey); background: var(--app-bg); text-align: center; border-radius: 3px; font-weight: bold; padding: 2px 0; margin-bottom: 2px;}
         
         .staff-pill {
             background-color: var(--brand-pop-blue); color: white; padding: 4px 8px;
             border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 5px; text-align: left;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: left;
             display: flex; flex-direction: column; line-height: 1.2;
         }
         .staff-pill:active { cursor: grabbing; }
         .staff-pill.warning { background-color: var(--brand-accent-red); }
         .staff-pill.pool-item { background-color: var(--brand-dark-blue); border-radius: 20px; text-align: center; display: inline-block; white-space: nowrap; }
-        .staff-pill.ghost-pill { background-color: var(--brand-grey); opacity: 0.7; border: 1px dashed white; cursor: not-allowed; }
+        .staff-pill.ghost-pill { background-color: var(--brand-grey); opacity: 0.7; border: 1px dashed white; cursor: not-allowed; margin: 4px;}
         .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; }
 
-        .capacity-indicator { font-size: 0.75rem; color: var(--brand-grey); text-align: right; margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 4px; cursor: pointer; }
+        .capacity-indicator { font-size: 0.75rem; color: var(--brand-grey); text-align: right; margin-top: auto; border-top: 1px solid var(--border-color); padding: 4px; cursor: pointer; background: var(--app-bg);}
         .capacity-indicator:hover { color: var(--brand-pop-blue); font-weight: bold; }
         .capacity-full { color: var(--brand-accent-red); font-weight: bold; }
-        .drop-zone-active { background-color: rgba(0, 123, 255, 0.1); }
         
+        .drop-zone-active { background-color: rgba(0, 123, 255, 0.1) !important; }
         #auth-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--brand-dark-blue); z-index: 1070; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
     </style>
 </head>
@@ -82,6 +92,7 @@
                     <option value="LOC_A">Location A</option>
                     <option value="LOC_B">Location B</option>
                 </select>
+                <button class="btn btn-sm btn-primary" onclick="UI.openAddShiftModal()">+ Add Custom Shift</button>
             </div>
 
             <div class="staff-pool-container" id="staff-pool" ondragover="Scheduler.allowDrop(event)" ondrop="Scheduler.handleDrop(event, null, null)"></div>
@@ -93,7 +104,7 @@
         <div class="modal-dialog modal-sm">
             <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Time</h5>
+                    <h5 class="modal-title">Edit Assignment</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -109,17 +120,35 @@
         </div>
     </div>
 
+    <div class="modal fade" id="addShiftModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Custom Shift</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="new-shift-name" class="form-control mb-2" placeholder="Shift Name (e.g., Temp Cover)">
+                    <div class="d-flex gap-2 mb-2">
+                        <input type="time" id="new-shift-start" class="form-control">
+                        <input type="time" id="new-shift-end" class="form-control">
+                    </div>
+                    <input type="number" id="new-shift-cap" class="form-control" placeholder="Capacity (e.g., 1)" value="1">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-sm w-100" onclick="Scheduler.addCustomShift()">Add Shift</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const CONFIG = {
-            GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec", // <--- PASTE YOUR GOOGLE APPS SCRIPT URL HERE (LINE 117)
+            GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec", // <--- PASTE YOUR GOOGLE APPS SCRIPT URL HERE
         };
 
         const STATE = {
-            data: {
-                shifts: [],
-                staff: [],
-                assignments: []
-            },
+            data: { shifts: [], staff: [], assignments: [] },
             capacityOverrides: {}
         };
 
@@ -139,7 +168,7 @@
                     return json;
                 } catch (e) {
                     console.error("API Error:", e);
-                    alert("Network Error. Check console for CORS issues or ensure you are using a local server.");
+                    alert("Network Error.");
                     return { success: false };
                 }
             },
@@ -158,20 +187,14 @@
                 const res = await API.call('SYNC_DATA');
                 
                 if (res.success && res.data && res.data.shifts) {
-                    
-                    // --- BULLETPROOF DATA NORMALIZER ---
-                    // This forces Google Sheets data into strict JavaScript formats
-                    
-                    // 1. Normalize Staff Data
                     res.data.staff.forEach(s => {
-                        s.id = String(s.id); // Force IDs to be strings so drag-and-drop matches
+                        s.id = String(s.id); 
                         if (typeof s.locations === 'string') {
                             try { s.locations = JSON.parse(s.locations); } 
                             catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); }
                         }
                     });
 
-                    // 2. Normalize Shifts Data
                     res.data.shifts.forEach(s => {
                         s.id = String(s.id);
                         if (typeof s.slots === 'string') {
@@ -180,17 +203,11 @@
                         }
                     });
 
-                    // 3. Normalize Assignments Data
                     if (res.data.assignments) {
-                        res.data.assignments.forEach(a => {
-                            a.staffId = String(a.staffId);
-                            a.shiftId = String(a.shiftId);
-                        });
-                    } else {
-                        res.data.assignments = [];
-                    }
+                        res.data.assignments.forEach(a => { a.staffId = String(a.staffId); a.shiftId = String(a.shiftId); });
+                    } else { res.data.assignments = []; }
                     
-                    STATE.data = res.data; // Apply the cleaned data
+                    STATE.data = res.data; 
                 }
                 
                 document.getElementById('auth-overlay').style.display = 'none';
@@ -211,13 +228,11 @@
 
             checkDrop: (staffId, targetShiftId, targetDay, editAssignId = null, testStart = null, testEnd = null) => {
                 const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
-                
                 let tStart = testStart || targetShift.time.split('-')[0];
                 let tEnd = testEnd || targetShift.time.split('-')[1];
                 
                 const tStartAbs = Compliance.getAbsoluteHour(tStart, targetDay);
                 const tEndAbs = Compliance.getAbsoluteHour(tEnd, targetDay, true, tStart);
-
                 let staffAssignments = STATE.data.assignments.filter(a => a.staffId === staffId && a.id !== editAssignId);
                 
                 if (staffAssignments.some(a => a.shiftId === targetShiftId && a.day === targetDay)) {
@@ -235,7 +250,6 @@
                     if ((tStartAbs >= eStartAbs && tStartAbs < eEndAbs) || (eStartAbs >= tStartAbs && eStartAbs < tEndAbs)) {
                          return { valid: false, reason: `Time overlap with Day ${a.day} assignment.` };
                     }
-                    
                     if (eEndAbs <= tStartAbs && (tStartAbs - eEndAbs < 8)) return { valid: false, reason: `8-Hour Turnover Violation (Day ${a.day}).` };
                     if (tEndAbs <= eStartAbs && (eStartAbs - tEndAbs < 8)) return { valid: false, reason: `8-Hour Turnover Violation (Day ${a.day}).` };
                 }
@@ -247,11 +261,8 @@
                 let maxConsecutive = 1; let currentConsecutive = 1;
                 for (let i = 1; i < sortedDays.length; i++) {
                     if (sortedDays[i] === sortedDays[i-1] + 1) {
-                        currentConsecutive++;
-                        maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
-                    } else {
-                        currentConsecutive = 1;
-                    }
+                        currentConsecutive++; maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+                    } else { currentConsecutive = 1; }
                 }
                 if (maxConsecutive > 6) return { valid: false, reason: "Scheduling exceeds 6 consecutive days." };
 
@@ -303,32 +314,71 @@
                     for (let day = 1; day <= 7; day++) {
                         const cell = document.createElement('div');
                         cell.className = 'scheduler-cell';
-                        cell.dataset.shiftId = shift.id; cell.dataset.day = day;
                         
-                        cell.addEventListener('dragover', Scheduler.allowDrop);
-                        cell.addEventListener('dragleave', Scheduler.handleDragLeave);
-                        cell.addEventListener('drop', (e) => Scheduler.handleDrop(e, shift.id, day));
+                        // 1. Determine Slots for this Shift (Default to the main time if no slots array)
+                        const slots = (shift.slots && shift.slots.length > 0) ? shift.slots : [shift.time];
+                        
+                        // 2. Render each slot as a sub-grid drop zone
+                        slots.forEach(slotTime => {
+                            const [sStart, sEnd] = slotTime.split('-');
+                            
+                            const slotDiv = document.createElement('div');
+                            slotDiv.className = 'slot-zone';
+                            slotDiv.innerHTML = `<div class="slot-label">${sStart} - ${sEnd}</div>`;
+                            
+                            // Make this specific slot the drop target
+                            slotDiv.addEventListener('dragover', Scheduler.allowDrop);
+                            slotDiv.addEventListener('dragleave', Scheduler.handleDragLeave);
+                            slotDiv.addEventListener('drop', (e) => Scheduler.handleDrop(e, shift.id, day, sStart, sEnd));
 
-                        const cellAssignments = STATE.data.assignments.filter(a => a.shiftId === shift.id && a.day === day && a.loc === locFilter);
-                        cellAssignments.forEach(assignment => {
-                            const staff = STATE.data.staff.find(s => s.id === assignment.staffId);
-                            if (staff) cell.appendChild(Scheduler.createAssignedPill(staff, assignment, shift, false));
+                            // Find Native Assignments that match this specific slot time
+                            const slotAssignments = STATE.data.assignments.filter(a => 
+                                a.shiftId === shift.id && a.day === day && a.loc === locFilter && 
+                                (a.customStart === sStart && a.customEnd === sEnd)
+                            );
+                            
+                            slotAssignments.forEach(assignment => {
+                                const staff = STATE.data.staff.find(s => s.id === assignment.staffId);
+                                if (staff) slotDiv.appendChild(Scheduler.createAssignedPill(staff, assignment, false));
+                            });
+
+                            cell.appendChild(slotDiv);
                         });
 
+                        // 3. Render Custom/Orphaned Times (Edited manually so they don't match a specific slot perfectly)
+                        const orphanedAssignments = STATE.data.assignments.filter(a => 
+                            a.shiftId === shift.id && a.day === day && a.loc === locFilter && 
+                            !slots.includes(`${a.customStart}-${a.customEnd}`)
+                        );
+                        orphanedAssignments.forEach(assignment => {
+                            const staff = STATE.data.staff.find(s => s.id === assignment.staffId);
+                            // We append orphans to the main cell so they aren't forced into a slot they don't belong to
+                            if (staff) {
+                                const pill = Scheduler.createAssignedPill(staff, assignment, false);
+                                pill.style.margin = "4px";
+                                cell.appendChild(pill);
+                            }
+                        });
+
+                        // 4. Render Ghost Overlaps
                         const ghostAssignments = STATE.data.assignments.filter(a => 
                             a.day === day && a.shiftId !== shift.id && a.loc === locFilter && Compliance.requiresGhost(a, shift)
                         );
                         ghostAssignments.forEach(ghost => {
                             const staff = STATE.data.staff.find(s => s.id === ghost.staffId);
-                            if (staff) cell.appendChild(Scheduler.createAssignedPill(staff, ghost, shift, true));
+                            if (staff) cell.appendChild(Scheduler.createAssignedPill(staff, ghost, true));
                         });
 
+                        // 5. Total Capacity for the Shift Block
+                        const cellAssignments = STATE.data.assignments.filter(a => a.shiftId === shift.id && a.day === day && a.loc === locFilter);
                         const effectiveCap = Scheduler.getCapacity(shift.id, day);
                         const capDiv = document.createElement('div');
                         capDiv.className = `capacity-indicator ${cellAssignments.length >= effectiveCap ? 'capacity-full' : ''}`;
-                        capDiv.innerText = `${cellAssignments.length}/${effectiveCap}`;
+                        capDiv.innerText = `${cellAssignments.length}/${effectiveCap} Staff Total`;
                         capDiv.onclick = () => Scheduler.overrideCapacity(shift.id, day);
-                        cell.appendChild(capDiv); canvas.appendChild(cell);
+                        
+                        cell.appendChild(capDiv); 
+                        canvas.appendChild(cell);
                     }
                 });
 
@@ -344,20 +394,17 @@
                 });
             },
 
-            createAssignedPill: (staff, assignment, shift, isGhost) => {
+            createAssignedPill: (staff, assignment, isGhost) => {
                 const pill = document.createElement('div');
                 pill.className = `staff-pill ${staff.hours > 40 ? 'warning' : ''} ${isGhost ? 'ghost-pill' : ''}`;
                 pill.dataset.assignmentId = assignment.id;
                 
-                let cStart = assignment.customStart || (shift.slots && shift.slots.length > 0 ? shift.slots[0].split('-')[0] : shift.time.split('-')[0]);
-                let cEnd = assignment.customEnd || (shift.slots && shift.slots.length > 0 ? shift.slots[0].split('-')[1] : shift.time.split('-')[1]);
-                let timeDisplay = `<div class="split-time">${cStart} - ${cEnd}</div>`;
-
+                let timeDisplay = `<div class="split-time">${assignment.customStart} - ${assignment.customEnd}</div>`;
                 pill.innerHTML = `<strong>${staff.name} ${isGhost ? '(Cover)' : ''}</strong>${timeDisplay}`;
                 
                 if (!isGhost) {
                     pill.draggable = true;
-                    pill.addEventListener('click', () => UI.openEditModal(assignment, cStart, cEnd));
+                    pill.addEventListener('click', (e) => { e.stopPropagation(); UI.openEditModal(assignment, assignment.customStart, assignment.customEnd); });
                     pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("assignmentId", assignment.id); e.dataTransfer.setData("source", "grid"); });
                 }
                 return pill;
@@ -366,7 +413,7 @@
             allowDrop: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-zone-active'); },
             handleDragLeave: (e) => e.currentTarget.classList.remove('drop-zone-active'),
 
-            handleDrop: (e, targetShiftId, targetDay) => {
+            handleDrop: (e, targetShiftId, targetDay, targetStart = null, targetEnd = null) => {
                 e.preventDefault();
                 document.querySelectorAll('.drop-zone-active').forEach(el => el.classList.remove('drop-zone-active'));
                 const source = e.dataTransfer.getData("source");
@@ -381,49 +428,34 @@
                     return;
                 }
 
-                const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
-                const currentCount = STATE.data.assignments.filter(a => a.shiftId === targetShiftId && a.day === targetDay && a.loc === locFilter).length;
+                // Check overall capacity before allowing drop into a sub-slot
                 const effCap = Scheduler.getCapacity(targetShiftId, targetDay);
-
-                if (currentCount >= effCap && source === 'pool') return alert(`Shift locked. Capacity is ${effCap}. Click number to override.`);
+                const currentCount = STATE.data.assignments.filter(a => a.shiftId === targetShiftId && a.day === targetDay && a.loc === locFilter).length;
+                if (currentCount >= effCap && source === 'pool') {
+                    return alert(`Shift blocked. Total capacity is ${effCap}. Click the capacity text at the bottom of the cell to override it.`);
+                }
 
                 if (source === 'pool') {
                     const staffId = e.dataTransfer.getData("staffId");
-                    
-                    let autoStart = null;
-                    let autoEnd = null;
-                    if (targetShift.slots && targetShift.slots.length > 0) {
-                        const slotIndex = currentCount % targetShift.slots.length;
-                        [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
-                    } else {
-                        [autoStart, autoEnd] = targetShift.time.split('-');
-                    }
-
-                    const check = Compliance.checkDrop(staffId, targetShiftId, targetDay, null, autoStart, autoEnd);
+                    const check = Compliance.checkDrop(staffId, targetShiftId, targetDay, null, targetStart, targetEnd);
                     if (!check.valid) return alert(check.reason);
 
                     STATE.data.assignments.push({
                         id: 'A_' + Date.now(),
                         staffId: staffId, shiftId: targetShiftId, day: targetDay, loc: locFilter,
-                        customStart: autoStart, customEnd: autoEnd
+                        customStart: targetStart, customEnd: targetEnd
                     });
                 } else if (source === 'grid') {
                     const assignId = e.dataTransfer.getData("assignmentId");
                     const assignment = STATE.data.assignments.find(a => a.id === assignId);
                     
-                    const check = Compliance.checkDrop(assignment.staffId, targetShiftId, targetDay, assignId);
+                    const check = Compliance.checkDrop(assignment.staffId, targetShiftId, targetDay, assignId, targetStart, targetEnd);
                     if (!check.valid) return alert(check.reason);
 
-                    assignment.shiftId = targetShiftId; assignment.day = targetDay;
-                    
-                    if (targetShift.slots && targetShift.slots.length > 0) {
-                        const slotIndex = currentCount % targetShift.slots.length;
-                        const [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
-                        assignment.customStart = autoStart; assignment.customEnd = autoEnd;
-                    } else {
-                        const [autoStart, autoEnd] = targetShift.time.split('-');
-                        assignment.customStart = autoStart; assignment.customEnd = autoEnd;
-                    }
+                    assignment.shiftId = targetShiftId; 
+                    assignment.day = targetDay;
+                    assignment.customStart = targetStart; 
+                    assignment.customEnd = targetEnd;
                 }
                 Scheduler.render();
             },
@@ -444,10 +476,33 @@
                 bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
                 Scheduler.render();
             },
+            
             removeAssignment: () => {
                 const id = document.getElementById('edit-assignment-id').value;
                 STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
                 bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
+                Scheduler.render();
+            },
+
+            // CUSTOM SHIFT LOGIC RESTORED
+            addCustomShift: () => {
+                const name = document.getElementById('new-shift-name').value;
+                const start = document.getElementById('new-shift-start').value;
+                const end = document.getElementById('new-shift-end').value;
+                const cap = document.getElementById('new-shift-cap').value || 1;
+                
+                if(!name || !start || !end) return alert("Please fill all fields.");
+
+                // Automatically generate a single slot for custom shifts
+                STATE.data.shifts.push({
+                    id: 'SH_CUSTOM_' + Date.now(),
+                    name: name,
+                    time: `${start}-${end}`,
+                    defaultCapacity: parseInt(cap),
+                    slots: [`${start}-${end}`] 
+                });
+                
+                bootstrap.Modal.getInstance(document.getElementById('addShiftModal')).hide();
                 Scheduler.render();
             }
         };
@@ -458,6 +513,10 @@
                 document.getElementById('edit-start-time').value = start;
                 document.getElementById('edit-end-time').value = end;
                 new bootstrap.Modal(document.getElementById('editAssignmentModal')).show();
+            },
+            openAddShiftModal: () => {
+                document.getElementById('new-shift-name').value = '';
+                new bootstrap.Modal(document.getElementById('addShiftModal')).show();
             }
         };
 
