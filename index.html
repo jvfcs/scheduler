@@ -1,1 +1,446 @@
-Hello World!
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#001f3f" id="meta-theme-color">
+    <title>Enterprise Scheduler</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        :root {
+            --brand-pop-blue: #007bff; --brand-dark-blue: #001f3f;
+            --brand-grey: #6c757d; --brand-accent-red: #dc3545;
+            --brand-accent-light: #17a2b8; --app-bg: #f8f9fa;
+            --card-bg: #ffffff; --text-main: #212529; --border-color: #dee2e6;
+        }
+
+        [data-bs-theme="dark"] {
+            --app-bg: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0;
+            --border-color: #333333; --brand-dark-blue: #000c1a;
+        }
+        [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
+
+        body { background-color: var(--app-bg); color: var(--text-main); font-family: sans-serif; margin: 0; padding-top: env(safe-area-inset-top); overflow: hidden; }
+        
+        .navbar { background-color: var(--brand-dark-blue) !important; }
+        .navbar-brand { color: white !important; font-weight: bold; }
+        .sync-indicator { font-size: 0.8rem; color: var(--brand-accent-light); opacity: 0; transition: opacity 0.3s; }
+        .sync-indicator.syncing { opacity: 1; }
+
+        .view-container { display: block; height: calc(100vh - 56px); overflow-y: auto; padding: 1rem; }
+
+        .staff-pool-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 15px; display: flex; gap: 10px; overflow-x: auto; min-height: 60px; }
+        .scheduler-grid { display: grid; grid-template-columns: 150px repeat(7, 1fr); gap: 1px; background: var(--border-color); border: 1px solid var(--border-color); }
+        .scheduler-header, .scheduler-cell { background: var(--card-bg); padding: 8px; min-height: 110px; display: flex; flex-direction: column; }
+        .scheduler-header { font-weight: bold; text-align: center; background: var(--brand-grey); color: white; min-height: 40px; justify-content: center;}
+        .shift-label { font-weight: bold; display: flex; flex-direction: column; justify-content: center; background: var(--card-bg); border-right: 2px solid var(--border-color); padding-left: 10px;}
+        
+        .staff-pill {
+            background-color: var(--brand-pop-blue); color: white; padding: 4px 8px;
+            border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 5px; text-align: left;
+            display: flex; flex-direction: column; line-height: 1.2;
+        }
+        .staff-pill:active { cursor: grabbing; }
+        .staff-pill.warning { background-color: var(--brand-accent-red); }
+        .staff-pill.pool-item { background-color: var(--brand-dark-blue); border-radius: 20px; text-align: center; display: inline-block; white-space: nowrap; }
+        .staff-pill.ghost-pill { background-color: var(--brand-grey); opacity: 0.7; border: 1px dashed white; cursor: not-allowed; }
+        .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; }
+
+        .capacity-indicator { font-size: 0.75rem; color: var(--brand-grey); text-align: right; margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 4px; cursor: pointer; }
+        .capacity-indicator:hover { color: var(--brand-pop-blue); font-weight: bold; }
+        .capacity-full { color: var(--brand-accent-red); font-weight: bold; }
+        .drop-zone-active { background-color: rgba(0, 123, 255, 0.1); }
+        
+        #auth-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--brand-dark-blue); z-index: 1070; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-overlay">
+        <h1 class="mb-4">Enterprise Scheduler</h1>
+        <button class="btn btn-outline-light mt-4" id="btn-login" onclick="Auth.loginSuccess()">Load System Data</button>
+    </div>
+
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">AppBase <span class="sync-indicator ms-2" id="sync-icon">● Syncing</span></a>
+            <div class="d-flex align-items-center">
+                <button class="btn btn-sm btn-outline-light me-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
+                <button class="btn btn-sm btn-outline-light" onclick="App.toggleTheme()">🌓</button>
+            </div>
+        </div>
+    </nav>
+
+    <div id="view-scheduler" class="view-container">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <select class="form-select form-select-sm d-inline-block w-auto" id="loc-filter" onchange="Scheduler.render()">
+                    <option value="LOC_A">Location A</option>
+                    <option value="LOC_B">Location B</option>
+                </select>
+            </div>
+
+            <div class="staff-pool-container" id="staff-pool" ondragover="Scheduler.allowDrop(event)" ondrop="Scheduler.handleDrop(event, null, null)"></div>
+            <div id="scheduler-canvas" class="scheduler-grid"></div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editAssignmentModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Time</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-assignment-id">
+                    <div class="mb-2"><label>Start Time</label><input type="time" id="edit-start-time" class="form-control"></div>
+                    <div class="mb-2"><label>End Time</label><input type="time" id="edit-end-time" class="form-control"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger btn-sm me-auto" onclick="Scheduler.removeAssignment()">Remove</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Scheduler.saveAssignmentEdit()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            GAS_URL: "https://script.google.com/macros/s/AKfycby3fWUZY70RN7nPtTCZqwUu7VYY2WtutgYvhq-jOJk/dev", // <--- PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+        };
+
+        const STATE = {
+            data: {
+                // Precise staggered slots as requested
+                shifts: [
+                    { id: 'SH_MORN', name: 'Morning', time: '04:30-14:00', defaultCapacity: 2, slots: ['04:30-13:00', '05:30-14:00'] },
+                    { id: 'SH_SWING', name: 'Swing', time: '12:30-22:00', defaultCapacity: 2, slots: ['12:30-21:00', '13:30-22:00'] },
+                    { id: 'SH_NIGHT', name: 'Graveyard', time: '20:30-06:00', defaultCapacity: 2, slots: ['20:30-05:00', '21:30-06:00'] }
+                ],
+                staff: [
+                    { id: 'S1', name: 'Alice Smith', locations: ['LOC_A', 'LOC_B'], hours: 38 },
+                    { id: 'S2', name: 'Bob Jones', locations: ['LOC_A'], hours: 42 },
+                    { id: 'S3', name: 'Charlie Day', locations: ['LOC_B', 'LOC_A'], hours: 20 },
+                    { id: 'S4', name: 'Diana Prince', locations: ['LOC_A'], hours: 10 }
+                ],
+                assignments: []
+            },
+            capacityOverrides: {}
+        };
+
+        const API = {
+            call: async (action, payload = {}) => {
+                if (!CONFIG.GAS_URL) return { success: true, data: STATE.data };
+                try {
+                    document.getElementById('sync-icon').classList.add('syncing');
+                    const res = await fetch(CONFIG.GAS_URL, { 
+                        method: 'POST', 
+                        // CRITICAL FIX: text/plain avoids the CORS preflight OPTIONS request
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        redirect: 'follow', // GAS requires following the 302 redirect
+                        body: JSON.stringify({ action, payload }) 
+                    });
+                    const json = await res.json();
+                    document.getElementById('sync-icon').classList.remove('syncing');
+                    return json;
+                } catch (e) {
+                    console.error("API Error:", e);
+                    alert("Network Error. Check console for CORS issues or ensure you are using a local server.");
+                    return { success: false };
+                }
+            },
+            saveSchedule: async () => {
+                const btn = document.getElementById('btn-save'); btn.innerText = "Saving...";
+                const res = await API.call('SAVE_SCHEDULE', { assignments: STATE.data.assignments });
+                if (res.success) btn.innerText = "Saved!";
+                setTimeout(() => btn.innerText = "Save Schedule", 2000);
+            }
+        };
+
+        const Auth = {
+            loginSuccess: async () => {
+                const btn = document.getElementById('btn-login');
+                btn.innerText = "Connecting...";
+                const res = await API.call('SYNC_DATA');
+                if (res.success && res.data && res.data.shifts) STATE.data = res.data;
+                document.getElementById('auth-overlay').style.display = 'none';
+                Scheduler.render();
+            }
+        };
+
+        const Compliance = {
+            // Converts "HH:MM" to absolute hours from Monday 00:00.
+            getAbsoluteHour: (timeStr, day, isEndTime = false, startTimeStr = "00:00") => {
+                let [hours, mins] = timeStr.split(':').map(Number);
+                let absolute = ((day - 1) * 24) + hours + (mins / 60);
+                if (isEndTime) {
+                    let [sHours] = startTimeStr.split(':').map(Number);
+                    if (hours <= sHours) absolute += 24; // Pushed to next day (overnight)
+                }
+                return absolute;
+            },
+
+            checkDrop: (staffId, targetShiftId, targetDay, editAssignId = null, testStart = null, testEnd = null) => {
+                const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
+                
+                // Get times to test (either custom passed in, or default to the shift's max bounds)
+                let tStart = testStart || targetShift.time.split('-')[0];
+                let tEnd = testEnd || targetShift.time.split('-')[1];
+                
+                const tStartAbs = Compliance.getAbsoluteHour(tStart, targetDay);
+                const tEndAbs = Compliance.getAbsoluteHour(tEnd, targetDay, true, tStart);
+
+                // Get all active assignments for this person, excluding the one we are currently editing/moving
+                let staffAssignments = STATE.data.assignments.filter(a => a.staffId === staffId && a.id !== editAssignId);
+                
+                // Check 1: Duplicate exact shift block
+                if (staffAssignments.some(a => a.shiftId === targetShiftId && a.day === targetDay)) {
+                    return { valid: false, reason: "Already assigned to this shift block." };
+                }
+
+                // Loop through their other assignments to check Overlaps and Turnovers
+                for (let a of staffAssignments) {
+                    const existingShift = STATE.data.shifts.find(s => s.id === a.shiftId);
+                    const eStart = a.customStart || existingShift.time.split('-')[0];
+                    const eEnd = a.customEnd || existingShift.time.split('-')[1];
+                    
+                    const eStartAbs = Compliance.getAbsoluteHour(eStart, a.day);
+                    const eEndAbs = Compliance.getAbsoluteHour(eEnd, a.day, true, eStart);
+
+                    // Overlap Check
+                    if ((tStartAbs >= eStartAbs && tStartAbs < eEndAbs) || (eStartAbs >= tStartAbs && eStartAbs < tEndAbs)) {
+                         return { valid: false, reason: `Time overlap with Day ${a.day} assignment.` };
+                    }
+                    
+                    // 8-Hour Turnover Check
+                    if (eEndAbs <= tStartAbs && (tStartAbs - eEndAbs < 8)) return { valid: false, reason: `8-Hour Turnover Violation (Day ${a.day}).` };
+                    if (tEndAbs <= eStartAbs && (eStartAbs - tEndAbs < 8)) return { valid: false, reason: `8-Hour Turnover Violation (Day ${a.day}).` };
+                }
+
+                // Check 3: 6 Consecutive Days Rule
+                let activeDays = new Set(staffAssignments.map(a => parseInt(a.day)));
+                activeDays.add(parseInt(targetDay));
+                let sortedDays = Array.from(activeDays).sort((a, b) => a - b);
+                
+                let maxConsecutive = 1; let currentConsecutive = 1;
+                for (let i = 1; i < sortedDays.length; i++) {
+                    if (sortedDays[i] === sortedDays[i-1] + 1) {
+                        currentConsecutive++;
+                        maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+                    } else {
+                        currentConsecutive = 1;
+                    }
+                }
+                if (maxConsecutive > 6) return { valid: false, reason: "Scheduling exceeds 6 consecutive days." };
+
+                return { valid: true };
+            },
+
+            // Much stricter ghost logic: Only ghost if they edited the time outside natural shift bounds.
+            requiresGhost: (assignment, testShift) => {
+                if (!assignment.customStart || !assignment.customEnd) return false;
+                const homeShift = STATE.data.shifts.find(s => s.id === assignment.shiftId);
+                if (!homeShift) return false;
+
+                // Absolute conversion logic omitted for brevity, using simple math
+                const t2h = (t) => { let [h,m] = t.split(':').map(Number); return h + (m/60); };
+                let cEnd = t2h(assignment.customEnd);
+                let homeEnd = t2h(homeShift.time.split('-')[1]);
+                let testStart = t2h(testShift.time.split('-')[0]);
+
+                if (cEnd < t2h(assignment.customStart)) cEnd += 24;
+                if (homeEnd < t2h(homeShift.time.split('-')[0])) homeEnd += 24;
+
+                // Only ghost if their custom end time extends past their home shift AND into the test shift
+                return (cEnd > homeEnd && cEnd > testStart);
+            }
+        };
+
+        const Scheduler = {
+            getCapacity: (shiftId, day) => STATE.capacityOverrides[`${shiftId}_${day}`] || STATE.data.shifts.find(s => s.id === shiftId).defaultCapacity,
+            overrideCapacity: (shiftId, day) => {
+                const current = Scheduler.getCapacity(shiftId, day);
+                const newCap = prompt(`Modify capacity for Day ${day}?`, current);
+                if (newCap !== null && !isNaN(parseInt(newCap))) { STATE.capacityOverrides[`${shiftId}_${day}`] = parseInt(newCap); Scheduler.render(); }
+            },
+            render: () => {
+                const canvas = document.getElementById('scheduler-canvas');
+                const pool = document.getElementById('staff-pool');
+                const locFilter = document.getElementById('loc-filter').value;
+                canvas.innerHTML = ''; pool.innerHTML = '';
+                
+                const days = ['Shift', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                days.forEach(d => {
+                    const div = document.createElement('div'); div.className = 'scheduler-header'; div.innerText = d;
+                    canvas.appendChild(div);
+                });
+
+                STATE.data.shifts.forEach(shift => {
+                    const shiftCell = document.createElement('div');
+                    shiftCell.className = 'shift-label';
+                    shiftCell.innerHTML = `<div>${shift.name}<br><small class="text-muted">${shift.time}</small></div>`;
+                    canvas.appendChild(shiftCell);
+
+                    for (let day = 1; day <= 7; day++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'scheduler-cell';
+                        cell.dataset.shiftId = shift.id; cell.dataset.day = day;
+                        
+                        cell.addEventListener('dragover', Scheduler.allowDrop);
+                        cell.addEventListener('dragleave', Scheduler.handleDragLeave);
+                        cell.addEventListener('drop', (e) => Scheduler.handleDrop(e, shift.id, day));
+
+                        const cellAssignments = STATE.data.assignments.filter(a => a.shiftId === shift.id && a.day === day && a.loc === locFilter);
+                        cellAssignments.forEach(assignment => {
+                            const staff = STATE.data.staff.find(s => s.id === assignment.staffId);
+                            if (staff) cell.appendChild(Scheduler.createAssignedPill(staff, assignment, shift, false));
+                        });
+
+                        // Strict Ghost Rendering
+                        const ghostAssignments = STATE.data.assignments.filter(a => 
+                            a.day === day && a.shiftId !== shift.id && a.loc === locFilter && Compliance.requiresGhost(a, shift)
+                        );
+                        ghostAssignments.forEach(ghost => {
+                            const staff = STATE.data.staff.find(s => s.id === ghost.staffId);
+                            if (staff) cell.appendChild(Scheduler.createAssignedPill(staff, ghost, shift, true));
+                        });
+
+                        const effectiveCap = Scheduler.getCapacity(shift.id, day);
+                        const capDiv = document.createElement('div');
+                        capDiv.className = `capacity-indicator ${cellAssignments.length >= effectiveCap ? 'capacity-full' : ''}`;
+                        capDiv.innerText = `${cellAssignments.length}/${effectiveCap}`;
+                        capDiv.onclick = () => Scheduler.overrideCapacity(shift.id, day);
+                        cell.appendChild(capDiv); canvas.appendChild(cell);
+                    }
+                });
+
+                STATE.data.staff.forEach(staff => {
+                    if (staff.locations.includes(locFilter)) {
+                        const pill = document.createElement('div');
+                        pill.className = 'staff-pill pool-item';
+                        pill.draggable = true; pill.dataset.staffId = staff.id;
+                        pill.innerText = staff.name;
+                        pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("staffId", staff.id); e.dataTransfer.setData("source", "pool"); });
+                        pool.appendChild(pill);
+                    }
+                });
+            },
+
+            createAssignedPill: (staff, assignment, shift, isGhost) => {
+                const pill = document.createElement('div');
+                pill.className = `staff-pill ${staff.hours > 40 ? 'warning' : ''} ${isGhost ? 'ghost-pill' : ''}`;
+                pill.dataset.assignmentId = assignment.id;
+                
+                let cStart = assignment.customStart || shift.slots[0].split('-')[0];
+                let cEnd = assignment.customEnd || shift.slots[0].split('-')[1];
+                let timeDisplay = `<div class="split-time">${cStart} - ${cEnd}</div>`;
+
+                pill.innerHTML = `<strong>${staff.name} ${isGhost ? '(Cover)' : ''}</strong>${timeDisplay}`;
+                
+                if (!isGhost) {
+                    pill.draggable = true;
+                    pill.addEventListener('click', () => UI.openEditModal(assignment, cStart, cEnd));
+                    pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("assignmentId", assignment.id); e.dataTransfer.setData("source", "grid"); });
+                }
+                return pill;
+            },
+            
+            allowDrop: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-zone-active'); },
+            handleDragLeave: (e) => e.currentTarget.classList.remove('drop-zone-active'),
+
+            handleDrop: (e, targetShiftId, targetDay) => {
+                e.preventDefault();
+                document.querySelectorAll('.drop-zone-active').forEach(el => el.classList.remove('drop-zone-active'));
+                const source = e.dataTransfer.getData("source");
+                const locFilter = document.getElementById('loc-filter').value;
+
+                if (!targetShiftId) {
+                    if (source === 'grid') {
+                        const assignId = e.dataTransfer.getData("assignmentId");
+                        STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== assignId);
+                        Scheduler.render();
+                    }
+                    return;
+                }
+
+                const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
+                const currentCount = STATE.data.assignments.filter(a => a.shiftId === targetShiftId && a.day === targetDay && a.loc === locFilter).length;
+                const effCap = Scheduler.getCapacity(targetShiftId, targetDay);
+
+                if (currentCount >= effCap && source === 'pool') return alert(`Shift locked. Capacity is ${effCap}. Click number to override.`);
+
+                if (source === 'pool') {
+                    const staffId = e.dataTransfer.getData("staffId");
+                    
+                    // Assign exact staggered slot
+                    const slotIndex = currentCount % targetShift.slots.length;
+                    const [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
+
+                    const check = Compliance.checkDrop(staffId, targetShiftId, targetDay, null, autoStart, autoEnd);
+                    if (!check.valid) return alert(check.reason);
+
+                    STATE.data.assignments.push({
+                        id: 'A_' + Date.now(),
+                        staffId: staffId, shiftId: targetShiftId, day: targetDay, loc: locFilter,
+                        customStart: autoStart, customEnd: autoEnd
+                    });
+                } else if (source === 'grid') {
+                    const assignId = e.dataTransfer.getData("assignmentId");
+                    const assignment = STATE.data.assignments.find(a => a.id === assignId);
+                    
+                    const check = Compliance.checkDrop(assignment.staffId, targetShiftId, targetDay, assignId);
+                    if (!check.valid) return alert(check.reason);
+
+                    assignment.shiftId = targetShiftId; assignment.day = targetDay;
+                    // Auto-reassign to proper staggered slot
+                    const slotIndex = currentCount % targetShift.slots.length;
+                    const [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
+                    assignment.customStart = autoStart; assignment.customEnd = autoEnd;
+                }
+                Scheduler.render();
+            },
+
+            saveAssignmentEdit: () => {
+                const id = document.getElementById('edit-assignment-id').value;
+                const assignment = STATE.data.assignments.find(a => a.id === id);
+                if(assignment) {
+                    const newStart = document.getElementById('edit-start-time').value;
+                    const newEnd = document.getElementById('edit-end-time').value;
+                    
+                    // Run compliance on the manual edit before saving
+                    const check = Compliance.checkDrop(assignment.staffId, assignment.shiftId, assignment.day, id, newStart, newEnd);
+                    if (!check.valid) return alert("Cannot edit time: " + check.reason);
+
+                    assignment.customStart = newStart;
+                    assignment.customEnd = newEnd;
+                }
+                bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
+                Scheduler.render();
+            },
+            removeAssignment: () => {
+                const id = document.getElementById('edit-assignment-id').value;
+                STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
+                bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
+                Scheduler.render();
+            }
+        };
+
+        const UI = {
+            openEditModal: (assignment, start, end) => {
+                document.getElementById('edit-assignment-id').value = assignment.id;
+                document.getElementById('edit-start-time').value = start;
+                document.getElementById('edit-end-time').value = end;
+                new bootstrap.Modal(document.getElementById('editAssignmentModal')).show();
+            }
+        };
+
+        const App = { toggleTheme: () => document.documentElement.setAttribute('data-bs-theme', document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark') };
+        document.addEventListener('DOMContentLoaded', () => { window.Scheduler = Scheduler; window.UI = UI; window.API = API; window.App = App; window.Auth = Auth; });
+    </script>
+</body>
+</html>
