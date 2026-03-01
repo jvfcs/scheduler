@@ -111,23 +111,13 @@
 
     <script>
         const CONFIG = {
-            GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec", // <--- PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+            GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec", // <--- PASTE YOUR GOOGLE APPS SCRIPT URL HERE (LINE 117)
         };
 
         const STATE = {
             data: {
-                // Precise staggered slots as requested
-                shifts: [
-                    { id: 'SH_MORN', name: 'Morning', time: '04:30-14:00', defaultCapacity: 2, slots: ['04:30-13:00', '05:30-14:00'] },
-                    { id: 'SH_SWING', name: 'Swing', time: '12:30-22:00', defaultCapacity: 2, slots: ['12:30-21:00', '13:30-22:00'] },
-                    { id: 'SH_NIGHT', name: 'Graveyard', time: '20:30-06:00', defaultCapacity: 2, slots: ['20:30-05:00', '21:30-06:00'] }
-                ],
-                staff: [
-                    { id: 'S1', name: 'Alice Smith', locations: ['LOC_A', 'LOC_B'], hours: 38 },
-                    { id: 'S2', name: 'Bob Jones', locations: ['LOC_A'], hours: 42 },
-                    { id: 'S3', name: 'Charlie Day', locations: ['LOC_B', 'LOC_A'], hours: 20 },
-                    { id: 'S4', name: 'Diana Prince', locations: ['LOC_A'], hours: 10 }
-                ],
+                shifts: [],
+                staff: [],
                 assignments: []
             },
             capacityOverrides: {}
@@ -140,9 +130,8 @@
                     document.getElementById('sync-icon').classList.add('syncing');
                     const res = await fetch(CONFIG.GAS_URL, { 
                         method: 'POST', 
-                        // CRITICAL FIX: text/plain avoids the CORS preflight OPTIONS request
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        redirect: 'follow', // GAS requires following the 302 redirect
+                        redirect: 'follow', 
                         body: JSON.stringify({ action, payload }) 
                     });
                     const json = await res.json();
@@ -167,20 +156,55 @@
                 const btn = document.getElementById('btn-login');
                 btn.innerText = "Connecting...";
                 const res = await API.call('SYNC_DATA');
-                if (res.success && res.data && res.data.shifts) STATE.data = res.data;
+                
+                if (res.success && res.data && res.data.shifts) {
+                    
+                    // --- BULLETPROOF DATA NORMALIZER ---
+                    // This forces Google Sheets data into strict JavaScript formats
+                    
+                    // 1. Normalize Staff Data
+                    res.data.staff.forEach(s => {
+                        s.id = String(s.id); // Force IDs to be strings so drag-and-drop matches
+                        if (typeof s.locations === 'string') {
+                            try { s.locations = JSON.parse(s.locations); } 
+                            catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); }
+                        }
+                    });
+
+                    // 2. Normalize Shifts Data
+                    res.data.shifts.forEach(s => {
+                        s.id = String(s.id);
+                        if (typeof s.slots === 'string') {
+                            try { s.slots = JSON.parse(s.slots); } 
+                            catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); }
+                        }
+                    });
+
+                    // 3. Normalize Assignments Data
+                    if (res.data.assignments) {
+                        res.data.assignments.forEach(a => {
+                            a.staffId = String(a.staffId);
+                            a.shiftId = String(a.shiftId);
+                        });
+                    } else {
+                        res.data.assignments = [];
+                    }
+                    
+                    STATE.data = res.data; // Apply the cleaned data
+                }
+                
                 document.getElementById('auth-overlay').style.display = 'none';
                 Scheduler.render();
             }
         };
 
         const Compliance = {
-            // Converts "HH:MM" to absolute hours from Monday 00:00.
             getAbsoluteHour: (timeStr, day, isEndTime = false, startTimeStr = "00:00") => {
                 let [hours, mins] = timeStr.split(':').map(Number);
                 let absolute = ((day - 1) * 24) + hours + (mins / 60);
                 if (isEndTime) {
                     let [sHours] = startTimeStr.split(':').map(Number);
-                    if (hours <= sHours) absolute += 24; // Pushed to next day (overnight)
+                    if (hours <= sHours) absolute += 24; 
                 }
                 return absolute;
             },
@@ -188,22 +212,18 @@
             checkDrop: (staffId, targetShiftId, targetDay, editAssignId = null, testStart = null, testEnd = null) => {
                 const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
                 
-                // Get times to test (either custom passed in, or default to the shift's max bounds)
                 let tStart = testStart || targetShift.time.split('-')[0];
                 let tEnd = testEnd || targetShift.time.split('-')[1];
                 
                 const tStartAbs = Compliance.getAbsoluteHour(tStart, targetDay);
                 const tEndAbs = Compliance.getAbsoluteHour(tEnd, targetDay, true, tStart);
 
-                // Get all active assignments for this person, excluding the one we are currently editing/moving
                 let staffAssignments = STATE.data.assignments.filter(a => a.staffId === staffId && a.id !== editAssignId);
                 
-                // Check 1: Duplicate exact shift block
                 if (staffAssignments.some(a => a.shiftId === targetShiftId && a.day === targetDay)) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
-                // Loop through their other assignments to check Overlaps and Turnovers
                 for (let a of staffAssignments) {
                     const existingShift = STATE.data.shifts.find(s => s.id === a.shiftId);
                     const eStart = a.customStart || existingShift.time.split('-')[0];
@@ -212,17 +232,14 @@
                     const eStartAbs = Compliance.getAbsoluteHour(eStart, a.day);
                     const eEndAbs = Compliance.getAbsoluteHour(eEnd, a.day, true, eStart);
 
-                    // Overlap Check
                     if ((tStartAbs >= eStartAbs && tStartAbs < eEndAbs) || (eStartAbs >= tStartAbs && eStartAbs < tEndAbs)) {
                          return { valid: false, reason: `Time overlap with Day ${a.day} assignment.` };
                     }
                     
-                    // 8-Hour Turnover Check
                     if (eEndAbs <= tStartAbs && (tStartAbs - eEndAbs < 8)) return { valid: false, reason: `8-Hour Turnover Violation (Day ${a.day}).` };
                     if (tEndAbs <= eStartAbs && (eStartAbs - tEndAbs < 8)) return { valid: false, reason: `8-Hour Turnover Violation (Day ${a.day}).` };
                 }
 
-                // Check 3: 6 Consecutive Days Rule
                 let activeDays = new Set(staffAssignments.map(a => parseInt(a.day)));
                 activeDays.add(parseInt(targetDay));
                 let sortedDays = Array.from(activeDays).sort((a, b) => a - b);
@@ -241,13 +258,11 @@
                 return { valid: true };
             },
 
-            // Much stricter ghost logic: Only ghost if they edited the time outside natural shift bounds.
             requiresGhost: (assignment, testShift) => {
                 if (!assignment.customStart || !assignment.customEnd) return false;
                 const homeShift = STATE.data.shifts.find(s => s.id === assignment.shiftId);
                 if (!homeShift) return false;
 
-                // Absolute conversion logic omitted for brevity, using simple math
                 const t2h = (t) => { let [h,m] = t.split(':').map(Number); return h + (m/60); };
                 let cEnd = t2h(assignment.customEnd);
                 let homeEnd = t2h(homeShift.time.split('-')[1]);
@@ -256,7 +271,6 @@
                 if (cEnd < t2h(assignment.customStart)) cEnd += 24;
                 if (homeEnd < t2h(homeShift.time.split('-')[0])) homeEnd += 24;
 
-                // Only ghost if their custom end time extends past their home shift AND into the test shift
                 return (cEnd > homeEnd && cEnd > testStart);
             }
         };
@@ -301,7 +315,6 @@
                             if (staff) cell.appendChild(Scheduler.createAssignedPill(staff, assignment, shift, false));
                         });
 
-                        // Strict Ghost Rendering
                         const ghostAssignments = STATE.data.assignments.filter(a => 
                             a.day === day && a.shiftId !== shift.id && a.loc === locFilter && Compliance.requiresGhost(a, shift)
                         );
@@ -336,8 +349,8 @@
                 pill.className = `staff-pill ${staff.hours > 40 ? 'warning' : ''} ${isGhost ? 'ghost-pill' : ''}`;
                 pill.dataset.assignmentId = assignment.id;
                 
-                let cStart = assignment.customStart || shift.slots[0].split('-')[0];
-                let cEnd = assignment.customEnd || shift.slots[0].split('-')[1];
+                let cStart = assignment.customStart || (shift.slots && shift.slots.length > 0 ? shift.slots[0].split('-')[0] : shift.time.split('-')[0]);
+                let cEnd = assignment.customEnd || (shift.slots && shift.slots.length > 0 ? shift.slots[0].split('-')[1] : shift.time.split('-')[1]);
                 let timeDisplay = `<div class="split-time">${cStart} - ${cEnd}</div>`;
 
                 pill.innerHTML = `<strong>${staff.name} ${isGhost ? '(Cover)' : ''}</strong>${timeDisplay}`;
@@ -377,9 +390,14 @@
                 if (source === 'pool') {
                     const staffId = e.dataTransfer.getData("staffId");
                     
-                    // Assign exact staggered slot
-                    const slotIndex = currentCount % targetShift.slots.length;
-                    const [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
+                    let autoStart = null;
+                    let autoEnd = null;
+                    if (targetShift.slots && targetShift.slots.length > 0) {
+                        const slotIndex = currentCount % targetShift.slots.length;
+                        [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
+                    } else {
+                        [autoStart, autoEnd] = targetShift.time.split('-');
+                    }
 
                     const check = Compliance.checkDrop(staffId, targetShiftId, targetDay, null, autoStart, autoEnd);
                     if (!check.valid) return alert(check.reason);
@@ -397,10 +415,15 @@
                     if (!check.valid) return alert(check.reason);
 
                     assignment.shiftId = targetShiftId; assignment.day = targetDay;
-                    // Auto-reassign to proper staggered slot
-                    const slotIndex = currentCount % targetShift.slots.length;
-                    const [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
-                    assignment.customStart = autoStart; assignment.customEnd = autoEnd;
+                    
+                    if (targetShift.slots && targetShift.slots.length > 0) {
+                        const slotIndex = currentCount % targetShift.slots.length;
+                        const [autoStart, autoEnd] = targetShift.slots[slotIndex].split('-');
+                        assignment.customStart = autoStart; assignment.customEnd = autoEnd;
+                    } else {
+                        const [autoStart, autoEnd] = targetShift.time.split('-');
+                        assignment.customStart = autoStart; assignment.customEnd = autoEnd;
+                    }
                 }
                 Scheduler.render();
             },
@@ -412,7 +435,6 @@
                     const newStart = document.getElementById('edit-start-time').value;
                     const newEnd = document.getElementById('edit-end-time').value;
                     
-                    // Run compliance on the manual edit before saving
                     const check = Compliance.checkDrop(assignment.staffId, assignment.shiftId, assignment.day, id, newStart, newEnd);
                     if (!check.valid) return alert("Cannot edit time: " + check.reason);
 
