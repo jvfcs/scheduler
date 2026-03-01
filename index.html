@@ -44,18 +44,20 @@
         .slot-zone:last-of-type { border-bottom: none; }
         .slot-label { font-size: 0.65rem; color: var(--brand-grey); background: var(--app-bg); text-align: center; border-radius: 3px; font-weight: bold; padding: 2px 0; margin-bottom: 2px;}
         
-        /* Pills updated to strictly center text vertically and horizontally */
+        /* Pills updated for absolute perfect vertical and horizontal centering */
         .staff-pill {
             background-color: var(--brand-pop-blue); color: white; padding: 6px;
             border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; line-height: 1.2;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            min-height: 46px; box-sizing: border-box;
         }
+        .staff-pill strong { margin: 0; padding: 0; line-height: 1.1; }
         .staff-pill:active { cursor: grabbing; }
         .staff-pill.warning { background-color: var(--brand-accent-red); }
-        .staff-pill.pool-item { background-color: var(--brand-dark-blue); border-radius: 20px; display: inline-block; white-space: nowrap; padding: 6px 12px;}
+        .staff-pill.pool-item { background-color: var(--brand-dark-blue); border-radius: 20px; display: inline-block; white-space: nowrap; padding: 6px 12px; min-height: auto;}
         .staff-pill.ghost-pill { background-color: var(--brand-grey); opacity: 0.8; border: 1px dashed white; cursor: not-allowed; margin: 4px;}
-        .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; margin-top: 2px;}
+        .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; margin-top: 4px; line-height: 1;}
 
         .capacity-indicator { font-size: 0.75rem; color: var(--brand-grey); text-align: right; margin-top: auto; border-top: 1px solid var(--border-color); padding: 4px; cursor: pointer; background: var(--app-bg);}
         .capacity-indicator:hover { color: var(--brand-pop-blue); font-weight: bold; }
@@ -63,7 +65,7 @@
         .drop-zone-active { background-color: rgba(0, 123, 255, 0.1) !important; }
         
         /* Full Screen Loading Overlay */
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--brand-dark-blue); z-index: 1070; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; transition: opacity 0.3s; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--brand-dark-blue); z-index: 1070; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; transition: opacity 0.4s ease-out; }
     </style>
 </head>
 <body>
@@ -186,14 +188,12 @@
             }
         };
 
-        // --- NEW ABSOLUTE DATE-TIME CALENDAR ENGINE ---
         const Calendar = {
             init: () => {
                 Calendar.goToday();
             },
             goToday: () => {
                 let d = new Date();
-                // Find Monday of current week
                 let day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1); 
                 STATE.currentWeekStart = new Date(d.setDate(diff));
                 Scheduler.render();
@@ -213,7 +213,7 @@
             },
             toFormat: (d) => {
                 let offset = d.getTimezoneOffset() * 60000;
-                return (new Date(d - offset)).toISOString().split('T')[0]; // "YYYY-MM-DD"
+                return (new Date(d - offset)).toISOString().split('T')[0];
             }
         };
 
@@ -227,7 +227,7 @@
             getRange: (dateStr, startStr, endStr) => {
                 let start = TimeUtils.getEpoch(dateStr, startStr);
                 let end = TimeUtils.getEpoch(dateStr, endStr);
-                if (end <= start) end += (24 * 60 * 60 * 1000); // Push to next day if overnight
+                if (end <= start) end += (24 * 60 * 60 * 1000); // Push to next day if overnight crossover
                 return { start, end };
             },
             getOverlapMs: (range1, range2) => {
@@ -238,13 +238,13 @@
         };
 
         const Compliance = {
-            checkDrop: (staffId, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null) => {
+            checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null) => {
                 const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
                 let tStart = testStart || targetShift.time.split('-')[0];
                 let tEnd = testEnd || targetShift.time.split('-')[1];
                 
                 const targetRange = TimeUtils.getRange(targetDateStr, tStart, tEnd);
-                let staffAssignments = STATE.data.assignments.filter(a => a.staffId === staffId && a.id !== editAssignId);
+                let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
                 if (staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr)) {
                     return { valid: false, reason: "Already assigned to this shift block." };
@@ -286,11 +286,8 @@
                 canvas.innerHTML = ''; pool.innerHTML = '';
                 
                 const weekDays = Calendar.getWeekArray();
-                
-                // Set Header Date
                 document.getElementById('calendar-week-display').innerText = `Week of ${weekDays[0].toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'})}`;
 
-                // Render Top Header Row (Mon, Mar 2...)
                 const emptyHeader = document.createElement('div'); emptyHeader.className = 'scheduler-header'; emptyHeader.innerText = 'Shift';
                 canvas.appendChild(emptyHeader);
                 weekDays.forEach(d => {
@@ -306,13 +303,12 @@
                     canvas.appendChild(shiftCell);
 
                     weekDays.forEach(dateObj => {
-                        const dateStr = Calendar.toFormat(dateObj); // YYYY-MM-DD
+                        const dateStr = Calendar.toFormat(dateObj); 
                         const cell = document.createElement('div');
                         cell.className = 'scheduler-cell';
                         
                         const slots = (shift.slots && shift.slots.length > 0) ? shift.slots : [shift.time];
                         
-                        // Render UI Sub-Slots
                         slots.forEach(slotTime => {
                             const [sStart, sEnd] = slotTime.split('-');
                             const slotDiv = document.createElement('div');
@@ -323,24 +319,37 @@
                             slotDiv.addEventListener('dragleave', Scheduler.handleDragLeave);
                             slotDiv.addEventListener('drop', (e) => Scheduler.handleDrop(e, shift.id, dateStr, sStart, sEnd));
 
-                            // FIXED: Look for assignments assigned strictly to this UI Slot Anchor
                             const slotAssignments = STATE.data.assignments.filter(a => 
                                 a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter && a.assignedSlot === slotTime
                             );
                             
                             slotAssignments.forEach(assignment => {
-                                const staff = STATE.data.staff.find(s => s.id === assignment.staffId);
+                                const staff = STATE.data.staff.find(s => s.email === assignment.email);
                                 if (staff) slotDiv.appendChild(Scheduler.createAssignedPill(staff, assignment, false));
                             });
                             cell.appendChild(slotDiv);
                         });
 
-                        // PERFECTED GHOST LOGIC (Differential Overlap)
+                        const orphanedAssignments = STATE.data.assignments.filter(a => 
+                            a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter && 
+                            !slots.includes(`${a.customStart}-${a.customEnd}`)
+                        );
+                        orphanedAssignments.forEach(assignment => {
+                            const staff = STATE.data.staff.find(s => s.email === assignment.email);
+                            if (staff) {
+                                const pill = Scheduler.createAssignedPill(staff, assignment, false);
+                                pill.style.margin = "4px";
+                                cell.appendChild(pill);
+                            }
+                        });
+
                         const targetRange = TimeUtils.getRange(dateStr, shift.time.split('-')[0], shift.time.split('-')[1]);
                         
                         const ghostAssignments = STATE.data.assignments.filter(a => {
-                            if (a.shiftId === shift.id || a.date !== dateStr || a.loc !== locFilter) return false;
-                            
+                            if (a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter) return false;
+                            if (a.loc !== locFilter) return false;
+                            if (!a.customStart || !a.customEnd) return false;
+
                             const nativeStart = a.assignedSlot ? a.assignedSlot.split('-')[0] : a.customStart;
                             const nativeEnd = a.assignedSlot ? a.assignedSlot.split('-')[1] : a.customEnd;
                             const nativeRange = TimeUtils.getRange(a.date, nativeStart, nativeEnd);
@@ -349,12 +358,11 @@
                             const nativeOverlap = TimeUtils.getOverlapMs(nativeRange, targetRange);
                             const customOverlap = TimeUtils.getOverlapMs(customRange, targetRange);
                             
-                            // Only ghost if the manual edit INCREASED the overlap with this shift
                             return customOverlap > 0 && customOverlap > nativeOverlap;
                         });
 
                         ghostAssignments.forEach(ghost => {
-                            const staff = STATE.data.staff.find(s => s.id === ghost.staffId);
+                            const staff = STATE.data.staff.find(s => s.email === ghost.email);
                             if (staff) {
                                 const pill = Scheduler.createAssignedPill(staff, ghost, true);
                                 pill.style.margin = "4px";
@@ -377,9 +385,9 @@
                     if (staff.locations.includes(locFilter)) {
                         const pill = document.createElement('div');
                         pill.className = 'staff-pill pool-item';
-                        pill.draggable = true; pill.dataset.staffId = staff.id;
+                        pill.draggable = true; pill.dataset.email = staff.email;
                         pill.innerText = staff.name;
-                        pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("staffId", staff.id); e.dataTransfer.setData("source", "pool"); });
+                        pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("email", staff.email); e.dataTransfer.setData("source", "pool"); });
                         pool.appendChild(pill);
                     }
                 });
@@ -398,7 +406,7 @@
                     pill.addEventListener('click', (e) => { e.stopPropagation(); UI.openEditModal(assignment, assignment.customStart, assignment.customEnd); });
                     pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("assignmentId", assignment.id); e.dataTransfer.setData("source", "grid"); });
                 } else {
-                    pill.innerHTML = `<strong>${staff.name} <br><small>(Covering)</small></strong>${timeDisplay}`;
+                    pill.innerHTML = `<strong>${staff.name} <br><small style="font-weight:normal">(Covering)</small></strong>${timeDisplay}`;
                     pill.title = "This is a cross-shift cover resulting from an extended assignment time.";
                 }
                 return pill;
@@ -429,26 +437,26 @@
                 }
 
                 if (source === 'pool') {
-                    const staffId = e.dataTransfer.getData("staffId");
-                    const check = Compliance.checkDrop(staffId, targetShiftId, targetDateStr, null, targetStart, targetEnd);
+                    const email = e.dataTransfer.getData("email");
+                    const check = Compliance.checkDrop(email, targetShiftId, targetDateStr, null, targetStart, targetEnd);
                     if (!check.valid) return alert(check.reason);
 
                     STATE.data.assignments.push({
                         id: 'A_' + Date.now(),
-                        staffId: staffId, shiftId: targetShiftId, date: targetDateStr, loc: locFilter,
-                        assignedSlot: `${targetStart}-${targetEnd}`, // THIS LOCKS THEM INTO THE UI BOX
+                        email: email, shiftId: targetShiftId, date: targetDateStr, loc: locFilter,
+                        assignedSlot: `${targetStart}-${targetEnd}`,
                         customStart: targetStart, customEnd: targetEnd
                     });
                 } else if (source === 'grid') {
                     const assignId = e.dataTransfer.getData("assignmentId");
                     const assignment = STATE.data.assignments.find(a => a.id === assignId);
                     
-                    const check = Compliance.checkDrop(assignment.staffId, targetShiftId, targetDateStr, assignId, targetStart, targetEnd);
+                    const check = Compliance.checkDrop(assignment.email, targetShiftId, targetDateStr, assignId, targetStart, targetEnd);
                     if (!check.valid) return alert(check.reason);
 
                     assignment.shiftId = targetShiftId; 
                     assignment.date = targetDateStr;
-                    assignment.assignedSlot = `${targetStart}-${targetEnd}`; // RE-LOCK THEM
+                    assignment.assignedSlot = `${targetStart}-${targetEnd}`; 
                     assignment.customStart = targetStart; 
                     assignment.customEnd = targetEnd;
                 }
@@ -462,12 +470,11 @@
                     const newStart = document.getElementById('edit-start-time').value;
                     const newEnd = document.getElementById('edit-end-time').value;
                     
-                    const check = Compliance.checkDrop(assignment.staffId, assignment.shiftId, assignment.date, id, newStart, newEnd);
+                    const check = Compliance.checkDrop(assignment.email, assignment.shiftId, assignment.date, id, newStart, newEnd);
                     if (!check.valid) return alert("Cannot edit time: " + check.reason);
 
                     assignment.customStart = newStart;
                     assignment.customEnd = newEnd;
-                    // Note: We DO NOT change assignedSlot here, keeping them anchored to their box!
                 }
                 bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
                 Scheduler.render();
@@ -515,13 +522,24 @@
             autoLoad: async () => {
                 const res = await API.call('SYNC_DATA');
                 if (res.success && res.data && res.data.shifts) {
-                    res.data.staff.forEach(s => { s.id = String(s.id); if (typeof s.locations === 'string') { try { s.locations = JSON.parse(s.locations); } catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }});
-                    res.data.shifts.forEach(s => { s.id = String(s.id); if (typeof s.slots === 'string') { try { s.slots = JSON.parse(s.slots); } catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }});
-                    if (res.data.assignments) { res.data.assignments.forEach(a => { a.staffId = String(a.staffId); a.shiftId = String(a.shiftId); a.date = a.date || "2026-03-02"; }); } else { res.data.assignments = []; }
+                    res.data.staff.forEach(s => { 
+                        s.email = String(s.email).toLowerCase().trim(); 
+                        if (typeof s.locations === 'string') { try { s.locations = JSON.parse(s.locations); } catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
+                    });
+                    res.data.shifts.forEach(s => { 
+                        s.id = String(s.id); 
+                        if (typeof s.slots === 'string') { try { s.slots = JSON.parse(s.slots); } catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
+                    });
+                    if (res.data.assignments) { 
+                        res.data.assignments.forEach(a => { 
+                            a.email = String(a.email).toLowerCase().trim(); 
+                            a.shiftId = String(a.shiftId); 
+                        }); 
+                    } else { res.data.assignments = []; }
                     STATE.data = res.data; 
                 }
                 document.getElementById('loading-overlay').style.opacity = '0';
-                setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 300);
+                setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
                 Calendar.init();
             }
         };
