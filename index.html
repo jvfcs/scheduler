@@ -40,28 +40,35 @@
         
         .scheduler-cell { background: var(--card-bg); min-height: 110px; display: flex; flex-direction: column; padding: 0; position: relative;}
         
-        .slot-zone { flex-grow: 1; border-bottom: 1px solid var(--border-color); padding: 4px; display: flex; flex-direction: column; gap: 4px; min-height: 50px; }
+        .slot-zone { flex-grow: 1; border-bottom: 1px solid var(--border-color); padding: 4px; display: flex; flex-direction: column; gap: 4px; min-height: 60px; }
         .slot-zone:last-of-type { border-bottom: none; }
         .slot-label { font-size: 0.65rem; color: var(--brand-grey); background: var(--app-bg); text-align: center; border-radius: 3px; font-weight: bold; padding: 2px 0; margin-bottom: 2px;}
         
-        /* Dedicated Cover Zone Styling */
         .cover-zone { background: rgba(23, 162, 184, 0.05); border-top: 2px dashed var(--border-color); }
         .cover-label { background: var(--brand-accent-light) !important; color: white !important; }
 
+        /* UNIQUE COLORS & COMPLIANCE WARNINGS */
         .staff-pill {
-            background-color: var(--brand-pop-blue); color: white; padding: 6px;
-            border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
+            color: #1a1a1a; /* Dark text to contrast with pastel dynamic backgrounds */
+            padding: 6px; border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
             display: flex !important; flex-direction: column !important; 
             justify-content: center !important; align-items: center !important; 
             text-align: center !important; min-height: 48px; width: 100%; box-sizing: border-box;
+            border: 2px solid rgba(0,0,0,0.15); /* Default subtle border */
         }
         .staff-pill strong { margin: 0; padding: 0; line-height: 1.1; width: 100%; text-align: center; }
         .staff-pill:active { cursor: grabbing; }
-        .staff-pill.warning { background-color: var(--brand-accent-red); }
-        .staff-pill.pool-item { background-color: var(--brand-dark-blue); border-radius: 20px; display: inline-flex; width: auto; padding: 6px 16px; min-height: auto;}
+        .staff-pill.pool-item { border-radius: 20px; display: inline-flex; width: auto; padding: 6px 16px; min-height: auto;}
         
-        .staff-pill.cover-pill { background-color: var(--brand-accent-light); } /* Visual distinction for covers */
+        /* Compliance Override Styles */
+        .staff-pill.compliance-warning {
+            border: 2px solid var(--brand-accent-red) !important;
+            background-color: #fff0f0 !important; /* Optional: force light red background if you want, but sticking to unique is better */
+        }
+        .staff-pill.compliance-warning strong {
+            color: var(--brand-accent-red) !important;
+        }
 
         .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; margin-top: 2px; width: 100%; text-align: center;}
 
@@ -241,27 +248,44 @@
         };
 
         const Compliance = {
-            // Updated to accept isCover flag. If isCover is true, bypass turnover rules.
+            // Evaluates total weekly hours for real-time compliance highlighting
+            getWeeklyHours: (email) => {
+                const weekDays = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
+                const weeklyAssignments = STATE.data.assignments.filter(a => a.email === email && weekDays.includes(a.date));
+                let totalMs = 0;
+                weeklyAssignments.forEach(a => {
+                    const range = TimeUtils.getRange(a.date, a.customStart, a.customEnd);
+                    totalMs += (range.end - range.start);
+                });
+                return totalMs / (1000 * 60 * 60); // Return in hours
+            },
+            hasConsecutiveWarning: (email) => {
+                const weekDays = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
+                const assignments = STATE.data.assignments.filter(a => a.email === email && weekDays.includes(a.date));
+                const uniqueDays = new Set(assignments.map(a => a.date));
+                return uniqueDays.size > 6; // Warning if working 7 days in the current week view
+            },
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCover = false) => {
-                const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
-                let tStart = testStart || targetShift.time.split('-')[0];
-                let tEnd = testEnd || targetShift.time.split('-')[1];
-                
-                const targetRange = TimeUtils.getRange(targetDateStr, tStart, tEnd);
+                const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
+                // If it is NOT a cover, check if they are already in this shift block
+                if (!isCover && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
+                    return { valid: false, reason: "Already assigned to this shift block." };
+                }
+
                 for (let a of staffAssignments) {
                     const existingIsCover = (a.assignedSlot === 'COVER');
                     const eStart = a.customStart || "00:00";
                     const eEnd = a.customEnd || "00:00";
                     const existingRange = TimeUtils.getRange(a.date, eStart, eEnd);
 
-                    // Physical overlaps are always illegal, cover or not.
+                    // Physical overlaps are physically impossible, so they are always blocked
                     if (TimeUtils.getOverlapMs(targetRange, existingRange) > 0) {
                          return { valid: false, reason: `Time overlap with another assignment on ${a.date}.` };
                     }
                     
-                    // 8-Hour Turnover Rule (IGNORED if either assignment is a Cover)
+                    // 8-Hour Turnover Rule (VIP BYPASS FOR COVERS)
                     if (!isCover && !existingIsCover) {
                         const eightHours = 8 * 60 * 60 * 1000;
                         if (targetRange.start >= existingRange.end && (targetRange.start - existingRange.end < eightHours)) {
@@ -273,6 +297,27 @@
                     }
                 }
                 return { valid: true };
+            }
+        };
+
+        const UI = {
+            // Generates a unique, readable pastel color based on the user's email hash
+            getStaffColor: (email) => {
+                if(!email) return '#cccccc';
+                let hash = 0;
+                for (let i = 0; i < email.length; i++) hash = email.charCodeAt(i) + ((hash << 5) - hash);
+                const hue = Math.abs(hash % 360);
+                return `hsl(${hue}, 80%, 85%)`; // Pastel saturation so dark text is always readable
+            },
+            openEditModal: (assignment, start, end) => {
+                document.getElementById('edit-assignment-id').value = assignment.id;
+                document.getElementById('edit-start-time').value = start;
+                document.getElementById('edit-end-time').value = end;
+                new bootstrap.Modal(document.getElementById('editAssignmentModal')).show();
+            },
+            openAddShiftModal: () => {
+                document.getElementById('new-shift-name').value = '';
+                new bootstrap.Modal(document.getElementById('addShiftModal')).show();
             }
         };
 
@@ -314,7 +359,7 @@
                         const slots = (shift.slots && shift.slots.length > 0) ? shift.slots : [shift.time];
                         
                         // 1. Render Normal Slots
-                        slots.forEach(slotTime => {
+                        slots.forEach((slotTime, index) => {
                             const [sStart, sEnd] = slotTime.split('-');
                             const slotDiv = document.createElement('div');
                             slotDiv.className = 'slot-zone';
@@ -324,11 +369,13 @@
                             slotDiv.addEventListener('dragleave', Scheduler.handleDragLeave);
                             slotDiv.addEventListener('drop', (e) => Scheduler.handleDrop(e, shift.id, dateStr, sStart, sEnd, false));
 
-                            const slotAssignments = STATE.data.assignments.filter(a => 
-                                a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter && a.assignedSlot === slotTime
-                            );
+                            const slotAssignments = STATE.data.assignments.filter(a => {
+                                if (a.shiftId !== shift.id || a.date !== dateStr || a.loc !== locFilter) return false;
+                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0);
+                            });
                             
                             slotAssignments.forEach(assignment => {
+                                assignment.assignedSlot = slotTime; 
                                 const staff = STATE.data.staff.find(s => s.email === assignment.email);
                                 if (staff) slotDiv.appendChild(Scheduler.createAssignedPill(staff, assignment, false));
                             });
@@ -372,6 +419,13 @@
                         pill.className = 'staff-pill pool-item';
                         pill.draggable = true; pill.dataset.email = staff.email;
                         pill.innerText = staff.name;
+                        
+                        // Apply Unique Color and Warnings to Pool
+                        pill.style.backgroundColor = UI.getStaffColor(staff.email);
+                        if (Compliance.getWeeklyHours(staff.email) > 40 || Compliance.hasConsecutiveWarning(staff.email)) {
+                            pill.classList.add('compliance-warning');
+                        }
+
                         pill.addEventListener('dragstart', (e) => { e.dataTransfer.setData("email", staff.email); e.dataTransfer.setData("source", "pool"); });
                         pool.appendChild(pill);
                     }
@@ -380,12 +434,28 @@
 
             createAssignedPill: (staff, assignment, isCoverSlot) => {
                 const pill = document.createElement('div');
-                pill.className = `staff-pill ${staff.hours > 40 ? 'warning' : ''} ${isCoverSlot ? 'cover-pill' : ''}`;
+                pill.className = 'staff-pill';
                 pill.dataset.assignmentId = assignment.id;
                 
-                let timeDisplay = `<div class="split-time">${assignment.customStart} - ${assignment.customEnd}</div>`;
-                pill.innerHTML = `<strong>${staff.name}</strong>${timeDisplay}`;
+                // 1. Dynamic Staff Background Color
+                pill.style.backgroundColor = UI.getStaffColor(staff.email);
                 
+                // 2. Compliance Warning Logic (Over 40 Hours or > 6 Days)
+                const isOvertime = Compliance.getWeeklyHours(staff.email) > 40;
+                const isFatigued = Compliance.hasConsecutiveWarning(staff.email);
+                if (isOvertime || isFatigued) {
+                    pill.classList.add('compliance-warning');
+                    pill.title = "Compliance Warning: Exceeds 40 Hours or 6 Consecutive Days";
+                }
+                
+                let timeDisplay = `<div class="split-time">${assignment.customStart} - ${assignment.customEnd}</div>`;
+                
+                if (isCoverSlot) {
+                    pill.innerHTML = `<strong>${staff.name} <br><small style="font-weight:normal; font-size: 0.65rem;">(Cover)</small></strong>${timeDisplay}`;
+                } else {
+                    pill.innerHTML = `<strong>${staff.name}</strong>${timeDisplay}`;
+                }
+
                 pill.draggable = true;
                 pill.addEventListener('click', (e) => { e.stopPropagation(); UI.openEditModal(assignment, assignment.customStart, assignment.customEnd); });
                 pill.addEventListener('dragstart', (e) => { 
@@ -414,7 +484,7 @@
                     return;
                 }
 
-                // Check capacity ONLY for normal slots, Covers are limitless
+                // Capacity check ONLY for normal slots (Covers are limitless)
                 if (!isCoverDrop) {
                     const effCap = Scheduler.getCapacity(targetShiftId, targetDateStr);
                     const currentCount = STATE.data.assignments.filter(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.loc === locFilter && a.assignedSlot !== 'COVER').length;
@@ -425,6 +495,8 @@
 
                 if (source === 'pool') {
                     const email = e.dataTransfer.getData("email");
+                    
+                    // Notice we pass `isCoverDrop` into the rule engine here to trigger the bypass
                     const check = Compliance.checkDrop(email, targetShiftId, targetDateStr, null, targetStart, targetEnd, isCoverDrop);
                     if (!check.valid) return alert(check.reason);
 
@@ -466,42 +538,6 @@
                 }
                 bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
                 Scheduler.render();
-            },
-            
-            removeAssignment: () => {
-                const id = document.getElementById('edit-assignment-id').value;
-                STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
-                bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal')).hide();
-                Scheduler.render();
-            },
-
-            addCustomShift: () => {
-                const name = document.getElementById('new-shift-name').value;
-                const start = document.getElementById('new-shift-start').value;
-                const end = document.getElementById('new-shift-end').value;
-                const cap = document.getElementById('new-shift-cap').value || 1;
-                
-                if(!name || !start || !end) return alert("Please fill all fields.");
-
-                STATE.data.shifts.push({
-                    id: 'SH_CUSTOM_' + Date.now(), name: name, time: `${start}-${end}`,
-                    defaultCapacity: parseInt(cap), slots: [`${start}-${end}`] 
-                });
-                bootstrap.Modal.getInstance(document.getElementById('addShiftModal')).hide();
-                Scheduler.render();
-            }
-        };
-
-        const UI = {
-            openEditModal: (assignment, start, end) => {
-                document.getElementById('edit-assignment-id').value = assignment.id;
-                document.getElementById('edit-start-time').value = start;
-                document.getElementById('edit-end-time').value = end;
-                new bootstrap.Modal(document.getElementById('editAssignmentModal')).show();
-            },
-            openAddShiftModal: () => {
-                document.getElementById('new-shift-name').value = '';
-                new bootstrap.Modal(document.getElementById('addShiftModal')).show();
             }
         };
 
