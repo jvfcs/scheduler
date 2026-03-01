@@ -60,11 +60,7 @@
         .staff-pill:active { cursor: grabbing; }
         .staff-pill.pool-item { border-radius: 20px; display: inline-flex; width: auto; padding: 6px 16px; min-height: auto;}
         
-        /* Overtime Warning overrides */
-        .staff-pill.compliance-warning {
-            border: 2px solid var(--brand-accent-red) !important;
-            background-color: #fff0f0 !important; 
-        }
+        .staff-pill.compliance-warning { border: 2px solid var(--brand-accent-red) !important; background-color: #fff0f0 !important; }
         .staff-pill.compliance-warning strong { color: var(--brand-accent-red) !important; }
 
         .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; margin-top: 2px; width: 100%; text-align: center;}
@@ -252,21 +248,28 @@
             },
             
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCover = false) => {
-                const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
-                let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
+                const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
+                let tStart = testStart || targetShift.time.split('-')[0];
+                let tEnd = testEnd || targetShift.time.split('-')[1];
                 
-                // 1. Shift Block Check (Prevent Double-Assignment in same non-cover slot)
+                // 1. Shift Block Check (Prevent Double-Assignment in same NON-cover slot)
+                let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 if (!isCover && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
                 // 2. Build Chronological Timeline for this Staff Member
+                const targetRange = TimeUtils.getRange(targetDateStr, tStart, tEnd);
+                targetRange.isCover = isCover;
+
                 let allRanges = staffAssignments.map(a => {
-                    return TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
+                    let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
+                    range.isCover = (a.assignedSlot === 'COVER');
+                    return range;
                 });
                 allRanges.push(targetRange);
 
-                // Sort purely by time
+                // Sort strictly by start time
                 allRanges.sort((a, b) => a.start - b.start);
 
                 // 3. Absolute Overlap and Turnover Checks
@@ -275,6 +278,9 @@
                     const current = allRanges[i];
                     const next = allRanges[i+1];
 
+                    // VIP BYPASS: If EITHER adjacent block is a Cover, completely skip collision rules between them.
+                    if (current.isCover || next.isCover) continue;
+
                     // Physical Overlap Check
                     if (next.start < current.end) {
                         return { valid: false, reason: "Time overlap detected with another assignment." };
@@ -282,9 +288,6 @@
 
                     // 8-Hour Gap Check
                     const gap = next.start - current.end;
-                    
-                    // Gap = 0 means continuous shift (Valid). Gap >= 8 Hours is full rest (Valid). 
-                    // Anything in between 0 and 8 hours is blocked.
                     if (gap > 0 && gap < eightHours) {
                         return { valid: false, reason: `8-Hour Turnover Violation. Rest period is only ${(gap/3600000).toFixed(1)} hours.` };
                     }
@@ -413,10 +416,8 @@
                         pill.draggable = true; pill.dataset.email = staff.email;
                         pill.innerText = staff.name;
                         
-                        // Apply Unique Color and Warnings to Pool
                         pill.style.backgroundColor = UI.getStaffColor(staff.email);
                         
-                        // Overtime / Days Logic
                         const weekDaysStr = weekDays.map(d => Calendar.toFormat(d));
                         const uniqueDays = new Set(STATE.data.assignments.filter(a => a.email === staff.email && weekDaysStr.includes(a.date)).map(a => a.date)).size;
                         const hoursOvertime = Compliance.getWeeklyHours(staff.email) > 40;
@@ -425,7 +426,7 @@
                             pill.classList.add('compliance-warning');
                             let w = [];
                             if (hoursOvertime) w.push("> 40 Hrs");
-                            if (uniqueDays === 7) w.push("Double OT (7 Days)");
+                            if (uniqueDays >= 7) w.push("Double OT (7 Days)");
                             else if (uniqueDays === 6) w.push("OT (6 Days)");
                             pill.title = `Warning: ${w.join(' | ')}`;
                         }
@@ -443,7 +444,6 @@
                 
                 pill.style.backgroundColor = UI.getStaffColor(staff.email);
                 
-                // Visual Overtime check for Matrix Pills
                 const weekDays = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
                 const uniqueDays = new Set(STATE.data.assignments.filter(a => a.email === staff.email && weekDays.includes(a.date)).map(a => a.date)).size;
                 const hoursOvertime = Compliance.getWeeklyHours(staff.email) > 40;
@@ -452,7 +452,7 @@
                     pill.classList.add('compliance-warning');
                     let w = [];
                     if (hoursOvertime) w.push("> 40 Hrs");
-                    if (uniqueDays === 7) w.push("Double OT (7 Days)");
+                    if (uniqueDays >= 7) w.push("Double OT (7 Days)");
                     else if (uniqueDays === 6) w.push("OT (6 Days)");
                     pill.title = `Warning: ${w.join(' | ')}`;
                 }
@@ -542,12 +542,10 @@
                     assignment.customStart = newStart;
                     assignment.customEnd = newEnd;
                 }
-                const modalEl = document.getElementById('editAssignmentModal');
-                const modal = bootstrap.Modal.getInstance(modalEl);
-                if (modal) modal.hide();
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('editAssignmentModal')).hide();
                 Scheduler.render();
             },
-
+            
             removeAssignment: () => {
                 const id = document.getElementById('edit-assignment-id').value;
                 STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
