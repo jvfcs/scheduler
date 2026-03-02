@@ -274,30 +274,22 @@
             </div>
         </div>
     </div>
-    <div class="modal fade" id="duplicateOverwriteModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content border-warning" style="background: var(--card-bg); color: var(--text-main);">
-                <div class="modal-header bg-warning text-dark"><h5 class="modal-title">⚠️ Data Exists</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">Existing assignments were found in the target weeks for this location. Proceeding will permanently overwrite them.</div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="Duplicator.handleOverwriteCancel()">Cancel & View Target Week</button>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="Duplicator.checkViolations(true)">Proceed (Overwrite)</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal fade" id="duplicateViolationModal" tabindex="-1">
+
+    <div class="modal fade" id="duplicateSummaryModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
-            <div class="modal-content border-danger" style="background: var(--card-bg); color: var(--text-main);">
-                <div class="modal-header bg-danger text-white"><h5 class="modal-title">⚠️ Compliance Violations Detected</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header"><h5 class="modal-title">Duplication Summary</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <p>The following issues will occur if this duplication proceeds:</p>
-                    <ul id="dup-violation-list" class="text-danger small" style="max-height: 200px; overflow-y: auto;"></ul>
+                    <div id="dup-summary-conflicts"></div>
+                    <div id="dup-summary-violations" style="display:none;">
+                        <h6 class="text-danger mt-3">⚠️ Compliance Violations Detected</h6>
+                        <ul id="dup-violation-list" class="text-danger small" style="max-height: 200px; overflow-y: auto;"></ul>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel Copy</button>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="Duplicator.execute('skip')">Proceed Without Violations (Skip)</button>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="Duplicator.execute('force')">Force Copy (Flag Red)</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="Duplicator.handleCancel()">Cancel & View Target Week</button>
+                    <button type="button" id="btn-dup-skip" class="btn btn-primary btn-sm" onclick="Duplicator.execute('skip')">Silent Skip (Drop Violations)</button>
+                    <button type="button" id="btn-dup-force" class="btn btn-danger btn-sm" onclick="Duplicator.execute('force')">Force Overwrite (Flag Red)</button>
                 </div>
             </div>
         </div>
@@ -1101,8 +1093,9 @@ const Availability = {
         };
 
         const Duplicator = {
-            state: { targetDates: [], conflicts: [], violations: [], newAssignments: [], allowOverwrite: false, targetMonday: null },
+            state: { targetDates: [], violations: [], newAssignments: [], targetMonday: null },
             openModal: () => {
+                Duplicator.state = { targetDates: [], violations: [], newAssignments: [], targetMonday: null };
                 document.getElementById('dup-target-date').value = '';
                 document.getElementById('dup-weeks').value = '1';
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateSetupModal')).show();
@@ -1118,14 +1111,18 @@ const Availability = {
 
                 if (sourceAssignments.length === 0) return alert("No assignments exist in this view to duplicate.");
 
+                // DST-Proof Math calculation
                 const sourceMonday = Calendar.getWeekArray()[0];
+                const sM = new Date(sourceMonday.getFullYear(), sourceMonday.getMonth(), sourceMonday.getDate());
+                
                 const targetStart = new Date(TimeUtils.getEpoch(startDateStr, "00:00"));
                 const targetMonday = new Date(targetStart);
                 const day = targetMonday.getDay();
                 const diff = targetMonday.getDate() - day + (day == 0 ? -6 : 1);
                 targetMonday.setDate(diff);
-
-                const dayOffset = Math.round((targetMonday - sourceMonday) / (1000 * 60 * 60 * 24));
+                
+                const tM = new Date(targetMonday.getFullYear(), targetMonday.getMonth(), targetMonday.getDate());
+                const dayOffset = Math.round((tM - sM) / (1000 * 60 * 60 * 24));
                 
                 let allTargetDates = [];
                 let proposedAssignments = [];
@@ -1133,9 +1130,11 @@ const Availability = {
                 for (let w = 0; w < weeks; w++) {
                     const weekOffsetDays = dayOffset + (w * 7);
                     sourceAssignments.forEach(a => {
-                        const oldDateEpoch = TimeUtils.getEpoch(a.date, "00:00");
-                        const newDate = new Date(oldDateEpoch + (weekOffsetDays * 24 * 60 * 60 * 1000));
-                        const newDateStr = Calendar.toFormat(newDate);
+                        // DST-proof shifting using absolute calendar days
+                        const [y, mo, d] = a.date.split('-').map(Number);
+                        const nextD = new Date(y, mo - 1, d + weekOffsetDays);
+                        const newDateStr = Calendar.toFormat(nextD);
+                        
                         allTargetDates.push(newDateStr);
 
                         proposedAssignments.push({
@@ -1150,29 +1149,11 @@ const Availability = {
                 allTargetDates = [...new Set(allTargetDates)];
                 const conflicts = STATE.data.assignments.filter(a => a.loc === locFilter && allTargetDates.includes(a.date));
 
-                Duplicator.state = { newAssignments: proposedAssignments, targetDates: allTargetDates, conflicts: conflicts, targetMonday: targetMonday, violations: [], allowOverwrite: false };
-                bootstrap.Modal.getInstance(document.getElementById('duplicateSetupModal')).hide();
-
-                if (conflicts.length > 0) bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateOverwriteModal')).show();
-                else Duplicator.checkViolations(false);
-            },
-            handleOverwriteCancel: () => {
-                bootstrap.Modal.getInstance(document.getElementById('duplicateOverwriteModal')).hide();
-                STATE.currentWeekStart = Duplicator.state.targetMonday;
-                Scheduler.render();
-            },
-            checkViolations: (allowOverwrite) => {
-                const ovrModal = bootstrap.Modal.getInstance(document.getElementById('duplicateOverwriteModal'));
-                if (ovrModal) ovrModal.hide();
-
-                const locFilter = document.getElementById('loc-filter').value;
-                let simulatedState = STATE.data.assignments.filter(a => {
-                    if (allowOverwrite && a.loc === locFilter && Duplicator.state.targetDates.includes(a.date)) return false;
-                    return true;
-                });
+                // Temporarily filter out conflicts to simulate what the database will look like post-overwrite
+                let simulatedState = STATE.data.assignments.filter(a => !(a.loc === locFilter && allTargetDates.includes(a.date)));
 
                 let violations = [];
-                Duplicator.state.newAssignments.forEach(a => {
+                proposedAssignments.forEach(a => {
                     const originalState = STATE.data.assignments;
                     STATE.data.assignments = simulatedState;
                     const check = Compliance.checkDrop(a.email, a.shiftId, a.date, a.id, a.customStart, a.customEnd, (a.assignedSlot === 'COVER'));
@@ -1185,25 +1166,43 @@ const Availability = {
                     simulatedState.push(a); 
                 });
 
-                Duplicator.state.violations = violations;
-                Duplicator.state.allowOverwrite = allowOverwrite;
+                Duplicator.state = { newAssignments: proposedAssignments, targetDates: allTargetDates, targetMonday: targetMonday, violations: violations };
+
+                bootstrap.Modal.getInstance(document.getElementById('duplicateSetupModal')).hide();
+                
+                // Build the Unified Summary UI
+                document.getElementById('dup-summary-conflicts').innerHTML = conflicts.length > 0 
+                    ? `<div class="alert alert-warning py-2 mb-2">⚠️ <b>${conflicts.length} existing assignments</b> found in target weeks. Proceeding will overwrite them.</div>`
+                    : `<div class="alert alert-success py-2 mb-2">✅ Target weeks are clear. No overwriting required.</div>`;
 
                 if (violations.length > 0) {
-                    const list = document.getElementById('dup-violation-list');
-                    list.innerHTML = violations.map(v => `<li class="mb-1">${v.reason}</li>`).join('');
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateViolationModal')).show();
+                    document.getElementById('dup-summary-violations').style.display = 'block';
+                    document.getElementById('dup-violation-list').innerHTML = violations.map(v => `<li class="mb-1">${v.reason}</li>`).join('');
+                    document.getElementById('btn-dup-skip').style.display = 'inline-block';
+                    document.getElementById('btn-dup-force').innerText = 'Force Overwrite (Flag Red)';
+                    document.getElementById('btn-dup-force').classList.replace('btn-primary', 'btn-danger');
                 } else {
-                    Duplicator.execute('proceed');
+                    document.getElementById('dup-summary-violations').style.display = 'none';
+                    document.getElementById('btn-dup-skip').style.display = 'none';
+                    document.getElementById('btn-dup-force').innerText = 'Proceed with Copy';
+                    document.getElementById('btn-dup-force').classList.replace('btn-danger', 'btn-primary');
                 }
+
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateSummaryModal')).show();
+            },
+            handleCancel: () => {
+                bootstrap.Modal.getInstance(document.getElementById('duplicateSummaryModal')).hide();
+                STATE.currentWeekStart = Duplicator.state.targetMonday;
+                Scheduler.render();
             },
             execute: (mode) => {
-                const vioModal = bootstrap.Modal.getInstance(document.getElementById('duplicateViolationModal'));
-                if (vioModal) vioModal.hide();
+                const sumModal = bootstrap.Modal.getInstance(document.getElementById('duplicateSummaryModal'));
+                if (sumModal) sumModal.hide();
 
                 const locFilter = document.getElementById('loc-filter').value;
-                if (Duplicator.state.allowOverwrite) {
-                    STATE.data.assignments = STATE.data.assignments.filter(a => !(a.loc === locFilter && Duplicator.state.targetDates.includes(a.date)));
-                }
+                
+                // Erase the target zone
+                STATE.data.assignments = STATE.data.assignments.filter(a => !(a.loc === locFilter && Duplicator.state.targetDates.includes(a.date)));
 
                 let toAdd = Duplicator.state.newAssignments;
                 if (mode === 'skip') {
@@ -1215,7 +1214,9 @@ const Availability = {
                 }
 
                 STATE.data.assignments.push(...toAdd);
-                API.saveSchedule(); // Automatically saves
+                API.saveSchedule(); 
+                
+                STATE.currentWeekStart = Duplicator.state.targetMonday;
                 Scheduler.render();
             }
         };
