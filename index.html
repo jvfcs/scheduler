@@ -469,9 +469,20 @@
             
             // EXACT LOGIC RESTORED - ONLY ADDED DYNAMIC RULES
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCoverSlot = false) => {
+                // 1. Check Disabled Status
+                const staffRecord = STATE.data.staff.find(s => s.email === email);
+                if (staffRecord && staffRecord.status === 'Disabled') {
+                    const shiftStartEpoch = TimeUtils.getEpoch(targetDateStr, testStart || "00:00");
+                    if (staffRecord.disabledEpoch && shiftStartEpoch > Number(staffRecord.disabledEpoch)) {
+                        return { valid: false, reason: "Staff account is disabled." };
+                    }
+                }
+
+                // 2. Check Vacation/Leave
                 const targetEpoch = TimeUtils.getEpoch(targetDateStr, "00:00");
                 const onLeave = STATE.data.availability.some(v => v.email === email && v.leaveStart && v.leaveEnd && TimeUtils.getEpoch(v.leaveStart, "00:00") <= targetEpoch && TimeUtils.getEpoch(v.leaveEnd, "23:59") >= targetEpoch);
                 if (onLeave) return { valid: false, reason: "Staff is on approved leave for this date." };
+                
                 const rules = Compliance.getRules();
                 const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
