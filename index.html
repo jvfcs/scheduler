@@ -9,20 +9,22 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
+    <style id="white-label-styles"></style>
+
     <style>
+        /* Fallback CSS if Template fails */
         :root {
             --brand-pop-blue: #007bff; --brand-dark-blue: #001f3f;
             --brand-grey: #6c757d; --brand-accent-red: #dc3545;
             --brand-accent-light: #17a2b8; --app-bg: #f8f9fa;
             --card-bg: #ffffff; --text-main: #212529; --border-color: #dee2e6;
         }
-
         [data-bs-theme="dark"] {
             --app-bg: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0;
             --border-color: #333333; --brand-dark-blue: #000c1a;
         }
-        [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
 
+        [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
         body { background-color: var(--app-bg); color: var(--text-main); font-family: sans-serif; margin: 0; padding-top: env(safe-area-inset-top); overflow: hidden; }
         
         .navbar { background-color: var(--brand-dark-blue) !important; }
@@ -48,8 +50,7 @@
         .cover-label { background: var(--brand-accent-light) !important; color: white !important; }
 
         .staff-pill {
-            color: #1a1a1a; 
-            padding: 6px; border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
+            color: #1a1a1a; padding: 6px; border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
             display: flex !important; flex-direction: column !important; 
             justify-content: center !important; align-items: center !important; 
@@ -82,8 +83,9 @@
 
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">AppBase <span class="sync-indicator ms-2" id="sync-icon">● Syncing</span></a>
-            <div class="d-flex align-items-center">
+            <a class="navbar-brand" href="#" id="ui-app-title">AppBase</a> 
+            <span class="sync-indicator ms-2" id="sync-icon">● Syncing</span>
+            <div class="d-flex align-items-center ms-auto">
                 <button class="btn btn-sm btn-outline-light me-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
                 <button class="btn btn-sm btn-outline-light" onclick="App.toggleTheme()">🌓</button>
             </div>
@@ -110,6 +112,8 @@
 
             <div class="staff-pool-container" id="staff-pool" ondragover="Scheduler.allowDrop(event)" ondrop="Scheduler.handleDrop(event, null, null)"></div>
             <div id="scheduler-canvas" class="scheduler-grid"></div>
+            
+            <footer class="mt-4 mb-2 text-center text-muted small" id="ui-footer"></footer>
         </div>
     </div>
 
@@ -161,7 +165,7 @@
         };
 
         const STATE = {
-            data: { shifts: [], staff: [], assignments: [] },
+            data: { shifts: [], staff: [], assignments: [], template: {} },
             capacityOverrides: {},
             currentWeekStart: new Date()
         };
@@ -240,6 +244,16 @@
         };
 
         const Compliance = {
+            // Dynamic Compliance Values pulled from Template (with safe fallbacks)
+            getRules: () => {
+                const t = STATE.data.template;
+                return {
+                    turnoverHours: parseFloat(t.rule_turnover_hours) || 8,
+                    overtimeHours: parseFloat(t.rule_overtime_hours) || 40,
+                    otDays: parseInt(t.rule_overtime_days) || 6,
+                    dotDays: parseInt(t.rule_double_overtime_days) || 7
+                };
+            },
             getWeeklyHours: (email) => {
                 const weekDays = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
                 const weeklyAssignments = STATE.data.assignments.filter(a => a.email === email && weekDays.includes(a.date));
@@ -252,33 +266,49 @@
             },
             
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCoverSlot = false) => {
+                const rules = Compliance.getRules();
                 const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
+                targetRange.isCover = isCoverSlot;
+
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
-                // Block double assignment to the EXACT SAME normal shift block
+                // Prevent Double-Assignment in same NON-cover slot
                 if (!isCoverSlot && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
-                // UNIVERSAL RULE ENGINE: Checks all ranges regardless of Cover vs Normal
-                for (let a of staffAssignments) {
-                    const existingRange = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
+                // Build Chronological Timeline for this Staff Member
+                let allRanges = staffAssignments.map(a => {
+                    let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
+                    range.isCover = (a.assignedSlot === 'COVER');
+                    return range;
+                });
+                allRanges.push(targetRange);
 
-                    // 1. Hard Physical Overlap Block
-                    if (TimeUtils.getOverlapMs(targetRange, existingRange) > 0) {
-                         return { valid: false, reason: `Time overlap detected with another assignment on ${a.date}.` };
+                // FILTER OUT COVERS BEFORE EVALUATING TURNAROUND
+                let normalRanges = allRanges.filter(r => !r.isCover);
+                normalRanges.sort((a, b) => a.start - b.start);
+
+                // Absolute Overlap and Turnover Checks on Normal Shifts ONLY
+                const turnoverReqMs = rules.turnoverHours * 60 * 60 * 1000;
+                for (let i = 0; i < normalRanges.length - 1; i++) {
+                    const current = normalRanges[i];
+                    const next = normalRanges[i+1];
+
+                    // Physical Overlap Check
+                    if (next.start < current.end) {
+                        return { valid: false, reason: "Violation: Time overlap detected with another standard assignment." };
                     }
-                    
-                    // 2. 8-Hour Turnover Rule
-                    let gap = 0;
-                    if (targetRange.start >= existingRange.end) gap = targetRange.start - existingRange.end;
-                    else if (existingRange.start >= targetRange.end) gap = existingRange.start - targetRange.end;
 
-                    const eightHours = 8 * 60 * 60 * 1000;
-                    if (gap > 0 && gap < eightHours) {
-                        return { valid: false, reason: `8-Hour Turnover Violation against shift on ${a.date}. Rest is only ${(gap/3600000).toFixed(1)} hours.` };
+                    // Turnover Gap Check 
+                    const gapMs = next.start - current.end;
+                    const gapHours = gapMs / (1000 * 60 * 60);
+                    
+                    if (gapHours >= 0 && gapHours < rules.turnoverHours) {
+                        return { valid: false, reason: `Violation: ${rules.turnoverHours}-Hour Turnover Rule. Rest period is only ${gapHours.toFixed(1)} hours.` };
                     }
                 }
+                
                 return { valid: true };
             }
         };
@@ -340,6 +370,7 @@
                         
                         const slots = (shift.slots && shift.slots.length > 0) ? shift.slots : [shift.time];
                         
+                        // 1. Render Normal Slots
                         slots.forEach((slotTime, index) => {
                             const [sStart, sEnd] = slotTime.split('-');
                             const slotDiv = document.createElement('div');
@@ -363,6 +394,7 @@
                             cell.appendChild(slotDiv);
                         });
 
+                        // 2. Render Dedicated Cover Zone
                         const coverDiv = document.createElement('div');
                         coverDiv.className = 'slot-zone cover-zone';
                         coverDiv.innerHTML = `<div class="slot-label cover-label">Cover Section</div>`;
@@ -381,6 +413,7 @@
                         });
                         cell.appendChild(coverDiv);
 
+                        // Cell Capacity Label
                         const cellAssignments = STATE.data.assignments.filter(a => a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter && a.assignedSlot !== 'COVER');
                         const effectiveCap = Scheduler.getCapacity(shift.id, dateStr);
                         const capDiv = document.createElement('div');
@@ -391,6 +424,8 @@
                         cell.appendChild(capDiv); canvas.appendChild(cell);
                     });
                 });
+
+                const rules = Compliance.getRules();
 
                 STATE.data.staff.forEach(staff => {
                     if (staff.locations.includes(locFilter)) {
@@ -403,14 +438,14 @@
                         
                         const weekDaysStr = weekDays.map(d => Calendar.toFormat(d));
                         const uniqueDays = new Set(STATE.data.assignments.filter(a => a.email === staff.email && weekDaysStr.includes(a.date)).map(a => a.date)).size;
-                        const hoursOvertime = Compliance.getWeeklyHours(staff.email) > 40;
+                        const hoursOvertime = Compliance.getWeeklyHours(staff.email) > rules.overtimeHours;
                         
-                        if (uniqueDays >= 6 || hoursOvertime) {
+                        if (uniqueDays >= rules.otDays || hoursOvertime) {
                             pill.classList.add('compliance-warning');
                             let w = [];
-                            if (hoursOvertime) w.push("> 40 Hrs");
-                            if (uniqueDays >= 7) w.push("Double OT (7 Days)");
-                            else if (uniqueDays === 6) w.push("OT (6 Days)");
+                            if (hoursOvertime) w.push(`> ${rules.overtimeHours} Hrs`);
+                            if (uniqueDays >= rules.dotDays) w.push(`Double OT (${uniqueDays} Days)`);
+                            else if (uniqueDays >= rules.otDays) w.push(`OT (${uniqueDays} Days)`);
                             pill.title = `Warning: ${w.join(' | ')}`;
                         }
 
@@ -427,16 +462,17 @@
                 
                 pill.style.backgroundColor = UI.getStaffColor(staff.email);
                 
+                const rules = Compliance.getRules();
                 const weekDays = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
                 const uniqueDays = new Set(STATE.data.assignments.filter(a => a.email === staff.email && weekDays.includes(a.date)).map(a => a.date)).size;
-                const hoursOvertime = Compliance.getWeeklyHours(staff.email) > 40;
+                const hoursOvertime = Compliance.getWeeklyHours(staff.email) > rules.overtimeHours;
                 
-                if (uniqueDays >= 6 || hoursOvertime) {
+                if (uniqueDays >= rules.otDays || hoursOvertime) {
                     pill.classList.add('compliance-warning');
                     let w = [];
-                    if (hoursOvertime) w.push("> 40 Hrs");
-                    if (uniqueDays >= 7) w.push("Double OT (7 Days)");
-                    else if (uniqueDays === 6) w.push("OT (6 Days)");
+                    if (hoursOvertime) w.push(`> ${rules.overtimeHours} Hrs`);
+                    if (uniqueDays >= rules.dotDays) w.push(`Double OT (${uniqueDays} Days)`);
+                    else if (uniqueDays >= rules.otDays) w.push(`OT (${uniqueDays} Days)`);
                     pill.title = `Warning: ${w.join(' | ')}`;
                 }
                 
@@ -494,7 +530,7 @@
                     }
                 }
 
-                // INTLLIGENT AUTO-TRIM FOR COVERS
+                // INTLLIGENT AUTO-TRIM FOR COVERS (Prevents 0-minute overlaps when chaining shifts)
                 if (isCoverDrop) {
                     let exist = STATE.data.assignments.filter(a => a.email === email && a.id !== assignId);
                     for (let a of exist) {
@@ -571,25 +607,73 @@
 
         const App = { 
             toggleTheme: () => document.documentElement.setAttribute('data-bs-theme', document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'),
+            
+            applyWhiteLabel: () => {
+                const t = STATE.data.template;
+                if (!t || Object.keys(t).length === 0) return; // Fallback to CSS defaults
+
+                // Apply Metadata
+                if (t.app_title) { document.title = t.app_title; document.getElementById('ui-app-title').innerText = t.app_title; }
+                
+                // Construct Footer
+                const comp = t.company_name || 'System';
+                const dev = t.developer_name || 'Developer';
+                const year = t.copyright_year || new Date().getFullYear();
+                document.getElementById('ui-footer').innerHTML = `&copy; ${year} ${comp}. All rights reserved.<br><small>Engineered by ${dev}</small>`;
+
+                // Build dynamic CSS string
+                const styleStr = `
+                    :root {
+                        --brand-pop-blue: ${t.theme_light_brand_pop || '#007bff'};
+                        --brand-dark-blue: ${t.theme_light_brand_dark || '#001f3f'};
+                        --app-bg: ${t.theme_light_app_bg || '#f8f9fa'};
+                        --card-bg: ${t.theme_light_card_bg || '#ffffff'};
+                        --text-main: ${t.theme_light_text_main || '#212529'};
+                        --border-color: ${t.theme_light_border || '#dee2e6'};
+                    }
+                    [data-bs-theme="dark"] {
+                        --app-bg: ${t.theme_dark_app_bg || '#121212'};
+                        --card-bg: ${t.theme_dark_card_bg || '#1e1e1e'};
+                        --text-main: ${t.theme_dark_text_main || '#e0e0e0'};
+                        --border-color: ${t.theme_dark_border || '#333333'};
+                        --brand-dark-blue: ${t.theme_dark_brand_dark || '#000c1a'};
+                    }
+                `;
+                document.getElementById('white-label-styles').innerHTML = styleStr;
+            },
+
             autoLoad: async () => {
                 const res = await API.call('SYNC_DATA');
-                if (res.success && res.data && res.data.shifts) {
-                    res.data.staff.forEach(s => { 
-                        s.email = String(s.email).toLowerCase().trim(); 
-                        if (typeof s.locations === 'string') { try { s.locations = JSON.parse(s.locations); } catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
-                    });
-                    res.data.shifts.forEach(s => { 
-                        s.id = String(s.id); 
-                        if (typeof s.slots === 'string') { try { s.slots = JSON.parse(s.slots); } catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
-                    });
+                if (res.success && res.data) {
+                    
+                    // Normalize Template Array into a standard Key:Value Object
+                    if (res.data.template) {
+                        let tObj = {};
+                        res.data.template.forEach(item => { if(item.key) tObj[item.key] = item.value; });
+                        STATE.data.template = tObj;
+                    }
+
+                    if (res.data.staff) {
+                        res.data.staff.forEach(s => { 
+                            s.email = String(s.email).toLowerCase().trim(); 
+                            if (typeof s.locations === 'string') { try { s.locations = JSON.parse(s.locations); } catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
+                        });
+                    }
+                    if (res.data.shifts) {
+                        res.data.shifts.forEach(s => { 
+                            s.id = String(s.id); 
+                            if (typeof s.slots === 'string') { try { s.slots = JSON.parse(s.slots); } catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
+                        });
+                    }
                     if (res.data.assignments) { 
                         res.data.assignments.forEach(a => { 
                             a.email = String(a.email).toLowerCase().trim(); 
                             a.shiftId = String(a.shiftId); 
                         }); 
                     } else { res.data.assignments = []; }
-                    STATE.data = res.data; 
                 }
+                
+                App.applyWhiteLabel();
                 document.getElementById('loading-overlay').style.opacity = '0';
                 setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
                 Calendar.init();
