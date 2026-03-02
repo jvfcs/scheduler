@@ -17,20 +17,20 @@
     <style id="white-label-styles"></style>
 
     <style>
-        /* Fallback CSS if Template fetch fails */
         :root {
             --brand-pop-blue: #007bff; --brand-dark-blue: #001f3f;
             --brand-grey: #6c757d; --brand-accent-red: #dc3545;
             --brand-accent-light: #17a2b8; --app-bg: #f8f9fa;
             --card-bg: #ffffff; --text-main: #212529; --border-color: #dee2e6;
         }
+
         [data-bs-theme="dark"] {
             --brand-pop-blue: #0d6efd;
             --app-bg: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0;
             --border-color: #333333; --brand-dark-blue: #000c1a;
         }
-
         [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
+
         body { background-color: var(--app-bg); color: var(--text-main); font-family: sans-serif; margin: 0; padding-top: env(safe-area-inset-top); overflow: hidden; }
         
         .navbar { background-color: var(--brand-dark-blue) !important; }
@@ -56,7 +56,8 @@
         .cover-label { background: var(--brand-accent-light) !important; color: white !important; }
 
         .staff-pill {
-            color: #1a1a1a; padding: 6px; border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
+            color: #1a1a1a; 
+            padding: 6px; border-radius: 4px; font-size: 0.8rem; cursor: grab; user-select: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
             display: flex !important; flex-direction: column !important; 
             justify-content: center !important; align-items: center !important; 
@@ -269,41 +270,32 @@
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCoverSlot = false) => {
                 const rules = Compliance.getRules();
                 const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
-                targetRange.isCover = isCoverSlot;
-
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
+                // Block double assignment to the EXACT SAME normal shift block
                 if (!isCoverSlot && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
-                let allRanges = staffAssignments.map(a => {
-                    let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
-                    range.isCover = (a.assignedSlot === 'COVER');
-                    return range;
-                });
-                allRanges.push(targetRange);
+                // UNIVERSAL RULE ENGINE (From your working code, injected with dynamic rules)
+                for (let a of staffAssignments) {
+                    const existingRange = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
 
-                let normalRanges = allRanges.filter(r => !r.isCover);
-                normalRanges.sort((a, b) => a.start - b.start);
-
-                const turnoverReqMs = rules.turnoverHours * 60 * 60 * 1000;
-                for (let i = 0; i < normalRanges.length - 1; i++) {
-                    const current = normalRanges[i];
-                    const next = normalRanges[i+1];
-
-                    if (next.start < current.end) {
-                        return { valid: false, reason: "Violation: Time overlap detected with another standard assignment." };
+                    // 1. Hard Physical Overlap Block
+                    if (TimeUtils.getOverlapMs(targetRange, existingRange) > 0) {
+                         return { valid: false, reason: `Time overlap detected with another assignment on ${a.date}.` };
                     }
-
-                    const gapMs = next.start - current.end;
-                    const gapHours = gapMs / (1000 * 60 * 60);
                     
-                    if (gapHours >= 0 && gapHours < rules.turnoverHours) {
-                        return { valid: false, reason: `Violation: ${rules.turnoverHours}-Hour Turnover Rule. Rest period is only ${gapHours.toFixed(1)} hours.` };
+                    // 2. Turnover Rule (Dynamic Hours)
+                    let gap = 0;
+                    if (targetRange.start >= existingRange.end) gap = targetRange.start - existingRange.end;
+                    else if (existingRange.start >= targetRange.end) gap = existingRange.start - targetRange.end;
+
+                    const turnoverReqMs = rules.turnoverHours * 60 * 60 * 1000;
+                    if (gap > 0 && gap < turnoverReqMs) {
+                        return { valid: false, reason: `${rules.turnoverHours}-Hour Turnover Violation against shift on ${a.date}. Rest is only ${(gap/3600000).toFixed(1)} hours.` };
                     }
                 }
-                
                 return { valid: true };
             }
         };
@@ -377,7 +369,7 @@
 
                             const slotAssignments = STATE.data.assignments.filter(a => {
                                 if (a.shiftId !== shift.id || a.date !== dateStr || a.loc !== locFilter) return false;
-                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0 && a.assignedSlot !== 'COVER');
+                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0);
                             });
                             
                             slotAssignments.forEach(assignment => {
@@ -522,6 +514,7 @@
                     }
                 }
 
+                // INTLLIGENT AUTO-TRIM FOR COVERS
                 if (isCoverDrop) {
                     let exist = STATE.data.assignments.filter(a => a.email === email && a.id !== assignId);
                     for (let a of exist) {
@@ -564,7 +557,7 @@
                     const isCover = (assignment.assignedSlot === 'COVER');
                     
                     const check = Compliance.checkDrop(assignment.email, assignment.shiftId, assignment.date, id, newStart, newEnd, isCover);
-                    if (!check.valid) return alert("Cannot edit time: " + check.reason);
+                    if (!check.valid) return alert(check.reason);
 
                     assignment.customStart = newStart;
                     assignment.customEnd = newEnd;
