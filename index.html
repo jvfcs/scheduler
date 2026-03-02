@@ -153,8 +153,8 @@
             <footer class="mt-4 mb-2 text-center text-muted small" id="ui-footer"></footer>
         </div>
     </div>
-<div id="view-management" style="display: none; padding: 1rem;">
-        <div class="container-fluid p-0">
+<div id="view-management" class="view-container" style="display: none;">
+        <div class="container-fluid p-0">
             <div class="d-flex align-items-center mb-3 px-3">
                 <h3 class="m-0 text-primary fw-bold"><span class="fs-4">⚙️</span> Management Portal</h3>
             </div>
@@ -509,27 +509,27 @@
                     <button type="button" class="btn btn-primary btn-sm" onclick="Management.saveShift()">Save Shift Template</button>
                 </div>
             </div>
-        </div>
-    </div>
-        <div class="modal-dialog modal-sm">
-            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Assignment</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="edit-assignment-id">
-                    <div class="mb-2"><label>Start Time (24H)</label><input type="time" id="edit-start-time" class="form-control"></div>
-                    <div class="mb-2"><label>End Time (24H)</label><input type="time" id="edit-end-time" class="form-control"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-danger btn-sm me-auto" onclick="Scheduler.removeAssignment()">Remove</button>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="Scheduler.saveAssignmentEdit()">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
+        </div>
+    </div>
+    <div class="modal fade" id="editAssignmentModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Assignment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-assignment-id">
+                    <div class="mb-2"><label>Start Time (24H)</label><input type="time" id="edit-start-time" class="form-control"></div>
+                    <div class="mb-2"><label>End Time (24H)</label><input type="time" id="edit-end-time" class="form-control"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger btn-sm me-auto" onclick="Scheduler.removeAssignment()">Remove</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Scheduler.saveAssignmentEdit()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="modal fade" id="addShiftModal" tabindex="-1">
         <div class="modal-dialog modal-sm">
             <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
