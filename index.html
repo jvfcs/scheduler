@@ -154,13 +154,13 @@
         </div>
     </div>
 <div id="view-management" class="view-container" style="display: none;">
-        <div class="container-fluid h-100 d-flex flex-column p-0">
+        <div class="container-fluid p-0">
             <div class="d-flex align-items-center mb-3 px-3">
                 <h3 class="m-0 text-primary fw-bold"><span class="fs-4">⚙️</span> Management Portal</h3>
             </div>
             
-            <div class="d-flex flex-column flex-md-row gap-3 flex-grow-1 px-3 pb-3" style="min-height: 0;">
-                <div class="nav flex-column nav-pills shadow-sm rounded bg-white p-2 border" role="tablist" aria-orientation="vertical" style="min-width: 220px; max-height: max-content;">
+            <div class="d-flex flex-column flex-md-row gap-3 px-3 pb-3">
+                <div class="nav flex-column nav-pills shadow-sm rounded bg-white p-2 border" role="tablist" aria-orientation="vertical" style="min-width: 220px; height: fit-content;">
                     <button class="nav-link active text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-staff" type="button" onclick="Availability.render()">👥 Staff Roster</button>
                     <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-locations" type="button" onclick="Management.renderLocations()">🏢 Locations</button>
                     <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-shifts" type="button" onclick="Management.renderShifts()">⏰ Shifts & Times</button>
@@ -170,9 +170,9 @@
                     <button class="nav-link text-start fw-bold text-muted" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button">🗄️ Audit Logs</button>
                 </div>
 
-                <div class="tab-content flex-grow-1 bg-white rounded border shadow-sm p-0 overflow-hidden d-flex flex-column" id="v-pills-tabContent">
+                <div class="tab-content flex-grow-1 bg-white rounded border shadow-sm p-0" id="v-pills-tabContent">
                     
-                    <div class="tab-pane fade show active h-100 d-flex flex-column" id="tab-staff" role="tabpanel">
+                    <div class="tab-pane fade show active" id="tab-staff" role="tabpanel">
                         <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
                             <h5 class="m-0 fw-bold">Staff Management</h5>
                             <div class="d-flex gap-2">
@@ -182,9 +182,9 @@
                                 <button class="btn btn-sm btn-primary shadow-sm" onclick="Availability.openModal('')">+ Add Staff</button>
                             </div>
                         </div>
-                        <div class="table-responsive flex-grow-1" style="overflow-y: auto;">
+                        <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light position-sticky top-0" style="z-index: 1;">
+                                <thead class="table-light">
                                     <tr>
                                         <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
                                         <th style="cursor:pointer;" onclick="Availability.sort('status')">Status ⇕</th>
@@ -201,12 +201,12 @@
                         </div>
                     </div>
 
-                    <div class="tab-pane fade h-100 d-flex flex-column" id="tab-locations" role="tabpanel">
+                    <div class="tab-pane fade" id="tab-locations" role="tabpanel">
                         <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
                             <h5 class="m-0 fw-bold">Locations Management</h5>
-                            <button class="btn btn-sm btn-primary shadow-sm" disabled>+ Add Location (WIP)</button>
+                            <button class="btn btn-sm btn-primary shadow-sm" onclick="alert('Adding locations coming next!')">+ Add Location</button>
                         </div>
-                        <div class="table-responsive flex-grow-1 p-3">
+                        <div class="table-responsive p-3">
                             <table class="table table-bordered table-hover align-middle">
                                 <thead class="table-light"><tr><th>Location Name</th><th>Status</th><th>Actions</th></tr></thead>
                                 <tbody id="mgt-locations-tbody"></tbody>
@@ -214,12 +214,12 @@
                         </div>
                     </div>
 
-                    <div class="tab-pane fade h-100 d-flex flex-column" id="tab-shifts" role="tabpanel">
+                    <div class="tab-pane fade" id="tab-shifts" role="tabpanel">
                         <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
                             <h5 class="m-0 fw-bold">Shifts Management</h5>
-                            <button class="btn btn-sm btn-primary shadow-sm" disabled>+ Add Standard Shift (WIP)</button>
+                            <button class="btn btn-sm btn-primary shadow-sm" onclick="alert('Adding standard shifts coming next!')">+ Add Standard Shift</button>
                         </div>
-                        <div class="table-responsive flex-grow-1 p-3">
+                        <div class="table-responsive p-3">
                             <table class="table table-bordered table-hover align-middle">
                                 <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Actions</th></tr></thead>
                                 <tbody id="mgt-shifts-tbody"></tbody>
@@ -227,7 +227,7 @@
                         </div>
                     </div>
 
-                    <div class="tab-pane fade h-100 overflow-auto p-4" id="tab-settings" role="tabpanel">
+                    <div class="tab-pane fade p-4" id="tab-settings" role="tabpanel">
                         <h5 class="fw-bold border-bottom pb-2 mb-3">White-Label & Theme</h5>
                         <div class="row mb-4">
                             <div class="col-md-6 mb-3">
@@ -255,23 +255,23 @@
                                 <input type="number" id="set-turnover" class="form-control">
                             </div>
                         </div>
-                        <button class="btn btn-success mt-3 shadow-sm" disabled>Save Configuration (WIP)</button>
+                        <button class="btn btn-success mt-3 shadow-sm" id="btn-save-settings" onclick="Management.saveSettings()">Save Configuration</button>
                     </div>
 
-                    <div class="tab-pane fade h-100 overflow-auto p-4 bg-light" id="tab-requests" role="tabpanel">
-                        <div class="row h-100">
-                            <div class="col-md-6 d-flex flex-column">
+                    <div class="tab-pane fade p-4 bg-light" id="tab-requests" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-6 d-flex flex-column mb-3">
                                 <h5 class="fw-bold text-primary mb-3">🏖️ Leave Requests</h5>
-                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted">
+                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted p-5">
                                     <div class="text-center">
                                         <div class="fs-1 mb-2">🌴</div>
                                         <p>No pending leave requests.</p>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 d-flex flex-column mt-3 mt-md-0">
+                            <div class="col-md-6 d-flex flex-column mb-3">
                                 <h5 class="fw-bold text-success mb-3">🔄 Shift Trades</h5>
-                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted">
+                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted p-5">
                                     <div class="text-center">
                                         <div class="fs-1 mb-2">🤝</div>
                                         <p>No pending shift trades.</p>
@@ -281,8 +281,8 @@
                         </div>
                     </div>
 
-                    <div class="tab-pane fade h-100 overflow-auto p-4 bg-light" id="tab-logs" role="tabpanel">
-                        <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                    <div class="tab-pane fade p-4 bg-light" id="tab-logs" role="tabpanel">
+                        <div class="d-flex align-items-center justify-content-center text-muted p-5">
                             <div class="text-center">
                                 <div class="fs-1 mb-2">🗄️</div>
                                 <h4>Audit Logs</h4>
@@ -1462,12 +1462,25 @@ const Availability = {
                 if(!tbody) return;
                 tbody.innerHTML = '';
                 STATE.data.locations.forEach(loc => {
+                    const isActive = String(loc.status).toLowerCase() !== 'disabled';
                     tbody.innerHTML += `<tr>
                         <td><strong>${loc.name}</strong></td>
-                        <td><span class="badge ${String(loc.status).toLowerCase() === 'active' ? 'bg-success' : 'bg-danger'}">${loc.status || 'Active'}</span></td>
-                        <td><button class="btn btn-sm btn-outline-primary" disabled>Edit</button></td>
+                        <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${loc.status || 'Active'}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-${isActive ? 'danger' : 'success'}" onclick="Management.toggleLocation('${loc.name}')">${isActive ? 'Disable' : 'Enable'}</button>
+                        </td>
                     </tr>`;
                 });
+            },
+            toggleLocation: async (name) => {
+                const loc = STATE.data.locations.find(l => l.name === name);
+                if (loc) {
+                    loc.status = String(loc.status).toLowerCase() === 'active' ? 'Disabled' : 'Active';
+                    Management.renderLocations();
+                    await API.call('SAVE_LOCATIONS', { locations: STATE.data.locations });
+                    UI.renderLocationDropdown();
+                    Availability.renderLocationDropdown();
+                }
             },
             renderShifts: () => {
                 const tbody = document.getElementById('mgt-shifts-tbody');
@@ -1479,7 +1492,7 @@ const Availability = {
                         <td>${shift.time}</td>
                         <td>${shift.defaultCapacity || 1}</td>
                         <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span class="text-muted fst-italic">Global (All)</span>'}</td>
-                        <td><button class="btn btn-sm btn-outline-primary" disabled>Edit</button></td>
+                        <td><button class="btn btn-sm btn-outline-primary" onclick="alert('Full shift editor coming in next update!')">Edit</button></td>
                     </tr>`;
                 });
             },
@@ -1490,6 +1503,24 @@ const Availability = {
                 document.getElementById('set-logo').value = t.brand_logo_url || '';
                 document.getElementById('set-ot-hours').value = t.rule_overtime_hours || '40';
                 document.getElementById('set-turnover').value = t.rule_turnover_hours || '8';
+            },
+            saveSettings: async () => {
+                const btn = document.getElementById('btn-save-settings');
+                btn.innerText = "Saving...";
+                
+                STATE.data.template.app_title = document.getElementById('set-app-title').value;
+                STATE.data.template.company_name = document.getElementById('set-company').value;
+                STATE.data.template.brand_logo_url = document.getElementById('set-logo').value;
+                STATE.data.template.rule_overtime_hours = document.getElementById('set-ot-hours').value;
+                STATE.data.template.rule_turnover_hours = document.getElementById('set-turnover').value;
+
+                const templateArray = Object.keys(STATE.data.template).map(k => ({ key: k, value: STATE.data.template[k] }));
+                
+                await API.call('SAVE_TEMPLATE', { template: templateArray });
+                App.applyWhiteLabel();
+                
+                btn.innerText = "Save Configuration";
+                alert("Settings Saved! Rules and White-labeling have been updated.");
             }
         };
 
