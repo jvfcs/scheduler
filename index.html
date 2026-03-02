@@ -204,11 +204,11 @@
                     <div class="tab-pane fade" id="tab-locations" role="tabpanel">
                         <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
                             <h5 class="m-0 fw-bold">Locations Management</h5>
-                            <button class="btn btn-sm btn-primary shadow-sm" onclick="alert('Adding locations coming next!')">+ Add Location</button>
+                            <button class="btn btn-sm btn-primary shadow-sm" onclick="Management.openLocationModal()">+ Add Location</button>
                         </div>
                         <div class="table-responsive p-3">
                             <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-light"><tr><th>Location Name</th><th>Status</th><th>Actions</th></tr></thead>
+                                <thead class="table-light"><tr><th>Location Name</th><th>Description</th><th>Status</th><th style="width: 100px;">Actions</th></tr></thead>
                                 <tbody id="mgt-locations-tbody"></tbody>
                             </table>
                         </div>
@@ -217,45 +217,66 @@
                     <div class="tab-pane fade" id="tab-shifts" role="tabpanel">
                         <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
                             <h5 class="m-0 fw-bold">Shifts Management</h5>
-                            <button class="btn btn-sm btn-primary shadow-sm" onclick="alert('Adding standard shifts coming next!')">+ Add Standard Shift</button>
+                            <div class="d-flex gap-2">
+                                <select class="form-select form-select-sm w-auto shadow-sm" id="mgt-shift-loc-filter" onchange="Management.renderShifts()">
+                                    <option value="ALL">Everywhere / Global</option>
+                                </select>
+                                <button class="btn btn-sm btn-primary shadow-sm" onclick="Management.openShiftModal()">+ Add Shift Template</button>
+                            </div>
                         </div>
                         <div class="table-responsive p-3">
                             <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Actions</th></tr></thead>
+                                <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Status</th><th style="width: 100px;">Actions</th></tr></thead>
                                 <tbody id="mgt-shifts-tbody"></tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="tab-pane fade p-4" id="tab-settings" role="tabpanel">
-                        <h5 class="fw-bold border-bottom pb-2 mb-3">White-Label & Theme</h5>
+                        <h5 class="fw-bold border-bottom pb-2 mb-3">General App Info</h5>
                         <div class="row mb-4">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">App Title</label>
-                                <input type="text" id="set-app-title" class="form-control">
+                            <div class="col-md-6 mb-3"><label class="form-label small fw-bold">App Title</label><input type="text" id="set_app_title" class="form-control form-control-sm"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Company Name</label><input type="text" id="set_company_name" class="form-control form-control-sm"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Developer Name</label><input type="text" id="set_developer_name" class="form-control form-control-sm"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Copyright Year</label><input type="number" id="set_copyright_year" class="form-control form-control-sm"></div>
+                        </div>
+
+                        <h5 class="fw-bold border-bottom pb-2 mb-3">Branding & Integrations</h5>
+                        <div class="row mb-4">
+                            <div class="col-md-12 mb-3"><label class="form-label small fw-bold">Brand Logo URL</label><input type="text" id="set_brand_logo_url" class="form-control form-control-sm" placeholder="https://..."></div>
+                            <div class="col-md-12 mb-3"><label class="form-label small fw-bold">Google Client ID (Authentication)</label><input type="text" id="set_google_client_id" class="form-control form-control-sm" placeholder="...apps.googleusercontent.com"></div>
+                        </div>
+
+                        <h5 class="fw-bold border-bottom pb-2 mb-3">Compliance Rules</h5>
+                        <div class="row mb-4">
+                            <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Turnover (Hrs)</label><input type="number" id="set_rule_turnover_hours" class="form-control form-control-sm"></div>
+                            <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Overtime (Hrs)</label><input type="number" id="set_rule_overtime_hours" class="form-control form-control-sm"></div>
+                            <div class="col-md-3 mb-3"><label class="form-label small fw-bold">OT Target (Days)</label><input type="number" id="set_rule_overtime_days" class="form-control form-control-sm"></div>
+                            <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Double OT (Days)</label><input type="number" id="set_rule_double_overtime_days" class="form-control form-control-sm"></div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5 class="fw-bold border-bottom pb-2 mb-3">Light Theme Colors</h5>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_brand_pop" class="form-control form-control-color me-2"><label class="small">Brand Pop (Primary)</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_brand_dark" class="form-control form-control-color me-2"><label class="small">Brand Dark (Navbar)</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_app_bg" class="form-control form-control-color me-2"><label class="small">App Background</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_card_bg" class="form-control form-control-color me-2"><label class="small">Card Background</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_text_main" class="form-control form-control-color me-2"><label class="small">Main Text</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_border" class="form-control form-control-color me-2"><label class="small">Borders</label></div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Company Name</label>
-                                <input type="text" id="set-company" class="form-control">
-                            </div>
-                            <div class="col-md-12 mb-3">
-                                <label class="form-label">Brand Logo URL</label>
-                                <input type="text" id="set-logo" class="form-control" placeholder="https://...">
+                            <div class="col-md-6">
+                                <h5 class="fw-bold border-bottom pb-2 mb-3">Dark Theme Colors</h5>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_brand_pop" class="form-control form-control-color me-2"><label class="small">Brand Pop (Primary)</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_brand_dark" class="form-control form-control-color me-2"><label class="small">Brand Dark (Navbar)</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_app_bg" class="form-control form-control-color me-2"><label class="small">App Background</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_card_bg" class="form-control form-control-color me-2"><label class="small">Card Background</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_text_main" class="form-control form-control-color me-2"><label class="small">Main Text</label></div>
+                                <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_border" class="form-control form-control-color me-2"><label class="small">Borders</label></div>
                             </div>
                         </div>
-                        
-                        <h5 class="fw-bold border-bottom pb-2 mb-3">Compliance Rules Engine</h5>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Weekly Overtime Threshold (Hours)</label>
-                                <input type="number" id="set-ot-hours" class="form-control">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Minimum Turnaround Time (Hours)</label>
-                                <input type="number" id="set-turnover" class="form-control">
-                            </div>
-                        </div>
-                        <button class="btn btn-success mt-3 shadow-sm" id="btn-save-settings" onclick="Management.saveSettings()">Save Configuration</button>
+
+                        <button class="btn btn-success mt-2 shadow-sm w-100" id="btn-save-settings" onclick="Management.saveSettings()">Save Configuration</button>
                     </div>
 
                     <div class="tab-pane fade p-4 bg-light" id="tab-requests" role="tabpanel">
@@ -434,7 +455,44 @@
             </div>
         </div>
     </div>
-    <div class="modal fade" id="editAssignmentModal" tabindex="-1">
+    <div class="modal fade" id="mgtLocationModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header"><h5 class="modal-title" id="loc-modal-title">Edit Location</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="loc-orig-name">
+                    <label class="form-label small fw-bold">Location Name</label>
+                    <input type="text" id="loc-name" class="form-control mb-2">
+                    <label class="form-label small fw-bold">Description</label>
+                    <textarea id="loc-desc" class="form-control" rows="2"></textarea>
+                    <small class="text-danger mt-2 d-block"><i>Note: Renaming a location will automatically update all historical shifts and staff profiles assigned to it.</i></small>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm w-100" onclick="Management.saveLocation()">Save Location</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="mgtShiftModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header"><h5 class="modal-title" id="shift-modal-title">Edit Shift Template</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="shift-id">
+                    <div class="row mb-2">
+                        <div class="col-8"><label class="form-label small fw-bold">Shift Name</label><input type="text" id="shift-name" class="form-control"></div>
+                        <div class="col-4"><label class="form-label small fw-bold">Capacity</label><input type="number" id="shift-cap" class="form-control" value="1"></div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6"><label class="form-label small fw-bold">Start Time</label><input type="time" id="shift-start" class="form-control"></div>
+                        <div class="col-6"><label class="form-label small fw-bold">End Time</label><input type="time" id="shift-end" class="form-control"></div>
+                    </div>
+                    <label class="form-label small fw-bold">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
+                    <select id="shift-locations" class="form-select" multiple size="4"></select>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm w-100" onclick="Management.saveShift()">Save Shift Template</button></div>
+            </div>
+        </div>
+    </div>
         <div class="modal-dialog modal-sm">
             <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
                 <div class="modal-header">
@@ -1456,18 +1514,26 @@ const Availability = {
                 Management.renderLocations();
                 Management.renderShifts();
                 Management.renderSettings();
+                
+                // Populate Dropdowns in management
+                const shiftFilter = document.getElementById('mgt-shift-loc-filter');
+                shiftFilter.innerHTML = '<option value="ALL">Everywhere / Global</option>';
+                STATE.data.locations.forEach(loc => { shiftFilter.innerHTML += `<option value="${loc.name}">${loc.name}</option>`; });
             },
+
+            // --- LOCATIONS ---
             renderLocations: () => {
                 const tbody = document.getElementById('mgt-locations-tbody');
                 if(!tbody) return;
                 tbody.innerHTML = '';
                 STATE.data.locations.forEach(loc => {
                     const isActive = String(loc.status).toLowerCase() !== 'disabled';
-                    tbody.innerHTML += `<tr>
+                    tbody.innerHTML += `<tr style="cursor:pointer;" onclick="Management.openLocationModal('${loc.name}')">
                         <td><strong>${loc.name}</strong></td>
+                        <td><small class="text-muted">${loc.description || ''}</small></td>
                         <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${loc.status || 'Active'}</span></td>
                         <td>
-                            <button class="btn btn-sm btn-outline-${isActive ? 'danger' : 'success'}" onclick="Management.toggleLocation('${loc.name}')">${isActive ? 'Disable' : 'Enable'}</button>
+                            <button class="btn btn-sm btn-outline-${isActive ? 'danger' : 'success'}" onclick="event.stopPropagation(); Management.toggleLocation('${loc.name}')">${isActive ? 'Disable' : 'Enable'}</button>
                         </td>
                     </tr>`;
                 });
@@ -1478,41 +1544,169 @@ const Availability = {
                     loc.status = String(loc.status).toLowerCase() === 'active' ? 'Disabled' : 'Active';
                     Management.renderLocations();
                     await API.call('SAVE_LOCATIONS', { locations: STATE.data.locations });
-                    UI.renderLocationDropdown();
-                    Availability.renderLocationDropdown();
+                    UI.renderLocationDropdown(); Availability.renderLocationDropdown();
                 }
             },
+            openLocationModal: (name = null) => {
+                const loc = STATE.data.locations.find(l => l.name === name) || { name: '', description: '' };
+                document.getElementById('loc-modal-title').innerText = name ? 'Edit Location' : 'Add New Location';
+                document.getElementById('loc-orig-name').value = name || '';
+                document.getElementById('loc-name').value = loc.name;
+                document.getElementById('loc-desc').value = loc.description || '';
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('mgtLocationModal')).show();
+            },
+            saveLocation: async () => {
+                const origName = document.getElementById('loc-orig-name').value;
+                const newName = document.getElementById('loc-name').value.trim();
+                const desc = document.getElementById('loc-desc').value.trim();
+                if(!newName) return alert("Location name is required.");
+
+                let deepSaveRequired = false;
+
+                if (!origName) {
+                    STATE.data.locations.push({ name: newName, description: desc, status: 'Active' });
+                } else {
+                    const loc = STATE.data.locations.find(l => l.name === origName);
+                    loc.name = newName;
+                    loc.description = desc;
+
+                    // Deep propagate name change
+                    if (origName !== newName) {
+                        deepSaveRequired = true;
+                        STATE.data.staff.forEach(s => { if(s.locations && s.locations.includes(origName)) s.locations[s.locations.indexOf(origName)] = newName; });
+                        STATE.data.shifts.forEach(s => { if(s.locations && s.locations.includes(origName)) s.locations[s.locations.indexOf(origName)] = newName; });
+                        STATE.data.assignments.forEach(a => { if(a.loc === origName) a.loc = newName; });
+                    }
+                }
+
+                bootstrap.Modal.getInstance(document.getElementById('mgtLocationModal')).hide();
+                Management.renderLocations();
+                UI.renderLocationDropdown(); Availability.renderLocationDropdown();
+                
+                document.getElementById('loading-text').innerText = "Propagating Data...";
+                document.getElementById('loading-overlay').style.display = 'flex'; document.getElementById('loading-overlay').style.opacity = '1';
+
+                await API.call('SAVE_LOCATIONS', { locations: STATE.data.locations });
+                
+                if (deepSaveRequired) {
+                    await API.call('SAVE_STAFF', { staff: STATE.data.staff });
+                    await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+                    const safePayload = STATE.data.assignments.map(a => ({ ...a, date: a.date ? `'${a.date}` : '', customStart: a.customStart ? `'${a.customStart}` : '', customEnd: a.customEnd ? `'${a.customEnd}` : '', assignedSlot: a.assignedSlot ? `'${a.assignedSlot}` : '' }));
+                    await API.call('SAVE_SCHEDULE', { assignments: safePayload });
+                }
+                
+                document.getElementById('loading-overlay').style.opacity = '0'; setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
+                Scheduler.render(); Availability.render(); Management.render();
+            },
+
+            // --- SHIFTS ---
             renderShifts: () => {
                 const tbody = document.getElementById('mgt-shifts-tbody');
+                const filter = document.getElementById('mgt-shift-loc-filter').value;
                 if(!tbody) return;
                 tbody.innerHTML = '';
-                STATE.data.shifts.forEach(shift => {
-                    tbody.innerHTML += `<tr>
+                
+                let filtered = STATE.data.shifts;
+                // Exclude custom shifts added directly from the calendar UI
+                filtered = filtered.filter(s => !String(s.id).includes('CUSTOM'));
+                if (filter !== 'ALL') {
+                    filtered = filtered.filter(s => !s.locations || s.locations.length === 0 || s.locations.includes(filter));
+                }
+
+                filtered.forEach(shift => {
+                    const isActive = String(shift.status).toLowerCase() !== 'disabled';
+                    tbody.innerHTML += `<tr style="cursor:pointer;" onclick="Management.openShiftModal('${shift.id}')">
                         <td><strong>${shift.name}</strong></td>
                         <td>${shift.time}</td>
                         <td>${shift.defaultCapacity || 1}</td>
                         <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span class="text-muted fst-italic">Global (All)</span>'}</td>
-                        <td><button class="btn btn-sm btn-outline-primary" onclick="alert('Full shift editor coming in next update!')">Edit</button></td>
+                        <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${shift.status || 'Active'}</span></td>
+                        <td><button class="btn btn-sm btn-outline-${isActive ? 'danger' : 'success'}" onclick="event.stopPropagation(); Management.toggleShift('${shift.id}')">${isActive ? 'Disable' : 'Enable'}</button></td>
                     </tr>`;
                 });
             },
+            toggleShift: async (id) => {
+                const shift = STATE.data.shifts.find(s => s.id === id);
+                if (shift) {
+                    shift.status = String(shift.status).toLowerCase() === 'active' ? 'Disabled' : 'Active';
+                    Management.renderShifts();
+                    await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+                }
+            },
+            openShiftModal: (id = null) => {
+                const shift = STATE.data.shifts.find(s => s.id === id) || { id: '', name: '', time: '09:00-17:00', defaultCapacity: 1, locations: [] };
+                document.getElementById('shift-modal-title').innerText = id ? 'Edit Shift Template' : 'Add Shift Template';
+                document.getElementById('shift-id').value = shift.id;
+                document.getElementById('shift-name').value = shift.name;
+                document.getElementById('shift-cap').value = shift.defaultCapacity;
+                
+                const times = shift.time.split('-');
+                document.getElementById('shift-start').value = times[0] || '';
+                document.getElementById('shift-end').value = times[1] || '';
+
+                const locSelect = document.getElementById('shift-locations');
+                locSelect.innerHTML = '';
+                STATE.data.locations.forEach(loc => { locSelect.innerHTML += `<option value="${loc.name}">${loc.name}</option>`; });
+                const selectedLocs = shift.locations || [];
+                Array.from(locSelect.options).forEach(opt => { if (selectedLocs.includes(opt.value)) opt.selected = true; });
+
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('mgtShiftModal')).show();
+            },
+            saveShift: async () => {
+                const id = document.getElementById('shift-id').value;
+                const name = document.getElementById('shift-name').value;
+                const start = document.getElementById('shift-start').value;
+                const end = document.getElementById('shift-end').value;
+                const cap = document.getElementById('shift-cap').value;
+                const locations = Array.from(document.getElementById('shift-locations').selectedOptions).map(opt => opt.value);
+                
+                if (!name || !start || !end) return alert("Name and times are required.");
+
+                const timeStr = `${start}-${end}`;
+
+                if (!id) {
+                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: [timeStr], defaultCapacity: parseInt(cap), locations: locations, status: 'Active' });
+                } else {
+                    const shift = STATE.data.shifts.find(s => s.id === id);
+                    shift.name = name; shift.time = timeStr; shift.slots = [timeStr]; shift.defaultCapacity = parseInt(cap); shift.locations = locations;
+                }
+
+                bootstrap.Modal.getInstance(document.getElementById('mgtShiftModal')).hide();
+                Management.renderShifts();
+                await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+            },
+
+            // --- THEMES & RULES ---
             renderSettings: () => {
                 const t = STATE.data.template || {};
-                document.getElementById('set-app-title').value = t.app_title || '';
-                document.getElementById('set-company').value = t.company_name || '';
-                document.getElementById('set-logo').value = t.brand_logo_url || '';
-                document.getElementById('set-ot-hours').value = t.rule_overtime_hours || '40';
-                document.getElementById('set-turnover').value = t.rule_turnover_hours || '8';
+                const keys = [
+                    'app_title', 'company_name', 'developer_name', 'copyright_year', 
+                    'brand_logo_url', 'google_client_id', 
+                    'rule_turnover_hours', 'rule_overtime_hours', 'rule_overtime_days', 'rule_double_overtime_days',
+                    'theme_light_brand_pop', 'theme_light_brand_dark', 'theme_light_app_bg', 'theme_light_card_bg', 'theme_light_text_main', 'theme_light_border',
+                    'theme_dark_brand_pop', 'theme_dark_brand_dark', 'theme_dark_app_bg', 'theme_dark_card_bg', 'theme_dark_text_main', 'theme_dark_border'
+                ];
+                keys.forEach(k => {
+                    const el = document.getElementById('set_' + k);
+                    if (el) el.value = t[k] || (el.type === 'color' ? '#000000' : '');
+                });
             },
             saveSettings: async () => {
                 const btn = document.getElementById('btn-save-settings');
                 btn.innerText = "Saving...";
                 
-                STATE.data.template.app_title = document.getElementById('set-app-title').value;
-                STATE.data.template.company_name = document.getElementById('set-company').value;
-                STATE.data.template.brand_logo_url = document.getElementById('set-logo').value;
-                STATE.data.template.rule_overtime_hours = document.getElementById('set-ot-hours').value;
-                STATE.data.template.rule_turnover_hours = document.getElementById('set-turnover').value;
+                const keys = [
+                    'app_title', 'company_name', 'developer_name', 'copyright_year', 
+                    'brand_logo_url', 'google_client_id', 
+                    'rule_turnover_hours', 'rule_overtime_hours', 'rule_overtime_days', 'rule_double_overtime_days',
+                    'theme_light_brand_pop', 'theme_light_brand_dark', 'theme_light_app_bg', 'theme_light_card_bg', 'theme_light_text_main', 'theme_light_border',
+                    'theme_dark_brand_pop', 'theme_dark_brand_dark', 'theme_dark_app_bg', 'theme_dark_card_bg', 'theme_dark_text_main', 'theme_dark_border'
+                ];
+                
+                keys.forEach(k => {
+                    const el = document.getElementById('set_' + k);
+                    if (el && el.value) STATE.data.template[k] = el.value;
+                });
 
                 const templateArray = Object.keys(STATE.data.template).map(k => ({ key: k, value: STATE.data.template[k] }));
                 
@@ -1520,7 +1714,7 @@ const Availability = {
                 App.applyWhiteLabel();
                 
                 btn.innerText = "Save Configuration";
-                alert("Settings Saved! Rules and White-labeling have been updated.");
+                setTimeout(() => { btn.innerText = "Configuration Saved!"; }, 1000);
             }
         };
 
