@@ -472,6 +472,7 @@ const Availability = {
                     return {
                         email: staff.email,
                         name: staff.name,
+                        role: staff.role || 'Staff',
                         status: staff.status || 'Active',
                         statusLog: staff.statusLog || '',
                         locations: locs.join('\n'),
@@ -498,9 +499,22 @@ const Availability = {
                 tableData.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.style.cursor = 'pointer';
-                    if (row.status === 'Disabled') tr.classList.add('table-secondary', 'text-muted'); // Greys out disabled staff visually
+                    if (row.status === 'Disabled') tr.classList.add('table-secondary', 'text-muted'); 
                     tr.onclick = () => Availability.openModal(row.email);
-                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.status}</td><td>${row.locDisplay}</td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td>${row.currentHrs.toFixed(2)}</td><td>${row.nextHrs.toFixed(2)}</td>`;
+                    tr.innerHTML = `
+                        <td>
+                            <span class="badge bg-secondary mb-1">${row.role}</span><br>
+                            <strong>${row.name}</strong><br>
+                            <small style="opacity: 0.7; font-size: 0.75rem;">${row.email}</small>
+                        </td>
+                        <td>${row.status}</td>
+                        <td>${row.locDisplay}</td>
+                        <td>${row.prefShifts}</td>
+                        <td>${row.prefDays}</td>
+                        <td>${row.leaveStr}</td>
+                        <td>${row.currentHrs.toFixed(2)}</td>
+                        <td>${row.nextHrs.toFixed(2)}</td>
+                    `;
                     tbody.appendChild(tr);
                 });
             },
