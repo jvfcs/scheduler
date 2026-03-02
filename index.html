@@ -60,7 +60,11 @@
         .staff-pill:active { cursor: grabbing; }
         .staff-pill.pool-item { border-radius: 20px; display: inline-flex; width: auto; padding: 6px 16px; min-height: auto;}
         
-        .staff-pill.compliance-warning { border: 2px solid var(--brand-accent-red) !important; background-color: #fff0f0 !important; }
+        /* Overtime Warning overrides */
+        .staff-pill.compliance-warning {
+            border: 2px solid var(--brand-accent-red) !important;
+            background-color: #fff0f0 !important; 
+        }
         .staff-pill.compliance-warning strong { color: var(--brand-accent-red) !important; }
 
         .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; margin-top: 2px; width: 100%; text-align: center;}
@@ -126,7 +130,7 @@
                     <div class="mb-2"><label>End Time (24H)</label><input type="time" id="edit-end-time" class="form-control"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-danger btn-sm me-auto" data-bs-dismiss="modal" onclick="Scheduler.removeAssignment()">Remove</button>
+                    <button type="button" class="btn btn-danger btn-sm me-auto" onclick="Scheduler.removeAssignment()">Remove</button>
                     <button type="button" class="btn btn-primary btn-sm" onclick="Scheduler.saveAssignmentEdit()">Save</button>
                 </div>
             </div>
@@ -221,11 +225,11 @@
         };
 
         const TimeUtils = {
+            // Strictly maps string to local browser dates to prevent any UTC-shifting anomilies
             getEpoch: (dateStr, timeStr) => { 
-                let d = new Date(dateStr + "T00:00:00");
+                let [y, mo, d] = dateStr.split('-').map(Number);
                 let [h, m] = timeStr.split(':').map(Number);
-                d.setHours(h, m, 0, 0);
-                return d.getTime();
+                return new Date(y, mo - 1, d, h, m, 0, 0).getTime();
             },
             getRange: (dateStr, startStr, endStr) => {
                 let start = TimeUtils.getEpoch(dateStr, startStr);
@@ -248,20 +252,17 @@
             },
             
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCover = false) => {
-                const targetShift = STATE.data.shifts.find(s => s.id === targetShiftId);
-                let tStart = testStart || targetShift.time.split('-')[0];
-                let tEnd = testEnd || targetShift.time.split('-')[1];
+                const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
+                targetRange.isCover = isCover;
+
+                let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
                 // 1. Shift Block Check (Prevent Double-Assignment in same NON-cover slot)
-                let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 if (!isCover && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
                 // 2. Build Chronological Timeline for this Staff Member
-                const targetRange = TimeUtils.getRange(targetDateStr, tStart, tEnd);
-                targetRange.isCover = isCover;
-
                 let allRanges = staffAssignments.map(a => {
                     let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
                     range.isCover = (a.assignedSlot === 'COVER');
@@ -269,27 +270,30 @@
                 });
                 allRanges.push(targetRange);
 
+                // 3. FILTER OUT COVERS BEFORE EVALUATING TURNAROUND
+                // Covers are completely invisible to the 8hr rule and overlap rule!
+                let normalRanges = allRanges.filter(r => !r.isCover);
+
                 // Sort strictly by start time
-                allRanges.sort((a, b) => a.start - b.start);
+                normalRanges.sort((a, b) => a.start - b.start);
 
-                // 3. Absolute Overlap and Turnover Checks
+                // 4. Absolute Overlap and Turnover Checks on Normal Shifts ONLY
                 const eightHours = 8 * 60 * 60 * 1000;
-                for (let i = 0; i < allRanges.length - 1; i++) {
-                    const current = allRanges[i];
-                    const next = allRanges[i+1];
-
-                    // VIP BYPASS: If EITHER adjacent block is a Cover, completely skip collision rules between them.
-                    if (current.isCover || next.isCover) continue;
+                for (let i = 0; i < normalRanges.length - 1; i++) {
+                    const current = normalRanges[i];
+                    const next = normalRanges[i+1];
 
                     // Physical Overlap Check
                     if (next.start < current.end) {
-                        return { valid: false, reason: "Time overlap detected with another assignment." };
+                        return { valid: false, reason: "Violation: Time overlap detected with another standard assignment." };
                     }
 
-                    // 8-Hour Gap Check
-                    const gap = next.start - current.end;
-                    if (gap > 0 && gap < eightHours) {
-                        return { valid: false, reason: `8-Hour Turnover Violation. Rest period is only ${(gap/3600000).toFixed(1)} hours.` };
+                    // 8-Hour Gap Check (gap >= 0 prevents back-to-back double shifts without rest)
+                    const gapMs = next.start - current.end;
+                    const gapHours = gapMs / (1000 * 60 * 60);
+                    
+                    if (gapHours >= 0 && gapHours < 8) {
+                        return { valid: false, reason: `Violation: 8-Hour Turnover Rule. Rest period is only ${gapHours.toFixed(1)} hours.` };
                     }
                 }
                 
@@ -537,19 +541,25 @@
                     const isCover = (assignment.assignedSlot === 'COVER');
                     
                     const check = Compliance.checkDrop(assignment.email, assignment.shiftId, assignment.date, id, newStart, newEnd, isCover);
-                    if (!check.valid) return alert("Cannot edit time: " + check.reason);
+                    if (!check.valid) return alert(check.reason);
 
                     assignment.customStart = newStart;
                     assignment.customEnd = newEnd;
                 }
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('editAssignmentModal')).hide();
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal'));
+                if (modal) modal.hide();
                 Scheduler.render();
             },
             
             removeAssignment: () => {
                 const id = document.getElementById('edit-assignment-id').value;
                 STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
-                Scheduler.render();
+                
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal'));
+                if (modal) modal.hide();
+                
+                // Allow Bootstrap fading backdrop to detach before heavy DOM redraw
+                setTimeout(() => Scheduler.render(), 200);
             },
 
             addCustomShift: () => {
