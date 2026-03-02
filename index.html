@@ -36,8 +36,10 @@
         
         .navbar { background-color: var(--brand-dark-blue) !important; }
         .navbar-brand { color: white !important; font-weight: bold; }
-        .sync-indicator { font-size: 0.8rem; color: var(--brand-accent-light); opacity: 0; transition: opacity 0.3s; }
+        
+        .sync-indicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.85); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity 0.3s; z-index: 1090; pointer-events: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .sync-indicator.syncing { opacity: 1; }
+        .sync-indicator .spinner-border { width: 1rem; height: 1rem; border-width: 0.15em; }
 
         .view-container { display: block; height: calc(100vh - 56px); overflow-y: auto; padding: 1rem; }
 
@@ -117,18 +119,19 @@
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#" id="ui-app-title">AppBase</a> 
-            <span class="sync-indicator ms-2" id="sync-icon">● Syncing</span>
-            <div class="ms-4 d-none d-md-flex gap-2">
+            <div class="d-flex align-items-center ms-auto gap-2">
                 <button class="btn btn-sm btn-outline-light" onclick="App.navigate('scheduler')">Scheduler</button>
                 <button class="btn btn-sm btn-outline-light" onclick="App.navigate('management')">Admin Portal</button>
-            </div>
-            <div class="d-flex align-items-center ms-auto">
-                <button class="btn btn-sm btn-outline-light me-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
-                <button class="btn btn-sm btn-outline-light me-3" onclick="Auth.signOut()">Sign Out</button>
-                <button class="btn btn-sm btn-outline-light" onclick="App.toggleTheme()">🌓</button>
+                <button class="btn btn-sm btn-outline-light ms-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
+                <button class="btn btn-sm btn-outline-light" onclick="Auth.signOut()">Sign Out</button>
+                <button class="btn btn-sm btn-outline-light ms-2" onclick="App.toggleTheme()">🌓</button>
             </div>
         </div>
     </nav>
+    <div class="sync-indicator" id="sync-icon">
+        <div class="spinner-border text-light" role="status"></div>
+        <span>Syncing...</span>
+    </div>
 
     <div id="view-scheduler" class="view-container">
         <div class="container-fluid">
@@ -154,26 +157,26 @@
         </div>
     </div>
 <div id="view-management" class="view-container" style="display: none;">
-        <div class="container-fluid p-0">
+        <div class="container-fluid p-0">
             <div class="d-flex align-items-center mb-3 px-3">
                 <h3 class="m-0 text-primary fw-bold"><span class="fs-4">⚙️</span> Management Portal</h3>
             </div>
             
             <div class="d-flex flex-column flex-md-row gap-3 px-3 pb-3">
-                <div class="nav flex-column nav-pills shadow-sm rounded bg-white p-2 border" role="tablist" aria-orientation="vertical" style="min-width: 220px; height: fit-content;">
+                <div class="nav flex-column nav-pills shadow-sm rounded p-2 border" role="tablist" aria-orientation="vertical" style="min-width: 220px; height: fit-content; background: var(--card-bg); border-color: var(--border-color) !important;">
                     <button class="nav-link active text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-staff" type="button" onclick="Availability.render()">👥 Staff Roster</button>
                     <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-locations" type="button" onclick="Management.renderLocations()">🏢 Locations</button>
                     <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-shifts" type="button" onclick="Management.renderShifts()">⏰ Shifts & Times</button>
                     <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-settings" type="button" onclick="Management.renderSettings()">🎨 Theme & Rules</button>
-                    <hr class="my-2">
+                    <hr class="my-2 border-secondary">
                     <button class="nav-link text-start mb-1 fw-bold text-success" data-bs-toggle="pill" data-bs-target="#tab-requests" type="button">📥 Approvals <span class="badge bg-danger ms-1">3</span></button>
-                    <button class="nav-link text-start fw-bold text-muted" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button">🗄️ Audit Logs</button>
+                    <button class="nav-link text-start fw-bold" style="color: var(--brand-grey);" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button">🗄️ Audit Logs</button>
                 </div>
 
-                <div class="tab-content flex-grow-1 bg-white rounded border shadow-sm p-0" id="v-pills-tabContent">
+                <div class="tab-content flex-grow-1 rounded border shadow-sm p-0" id="v-pills-tabContent" style="background: var(--card-bg); border-color: var(--border-color) !important;">
                     
                     <div class="tab-pane fade show active" id="tab-staff" role="tabpanel">
-                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center" style="background: var(--app-bg); border-color: var(--border-color) !important;">
                             <h5 class="m-0 fw-bold">Staff Management</h5>
                             <div class="d-flex gap-2">
                                 <select class="form-select form-select-sm w-auto shadow-sm" id="avail-loc-filter" onchange="Availability.render()">
@@ -183,9 +186,9 @@
                             </div>
                         </div>
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
+                            <table class="table table-hover align-middle mb-0" style="color: var(--text-main);">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border-color);">
                                         <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
                                         <th style="cursor:pointer;" onclick="Availability.sort('status')">Status ⇕</th>
                                         <th style="cursor:pointer;" onclick="Availability.sort('locations')">Location ⇕</th>
@@ -202,20 +205,26 @@
                     </div>
 
                     <div class="tab-pane fade" id="tab-locations" role="tabpanel">
-                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center" style="background: var(--app-bg); border-color: var(--border-color) !important;">
                             <h5 class="m-0 fw-bold">Locations Management</h5>
                             <button class="btn btn-sm btn-primary shadow-sm" onclick="Management.openLocationModal()">+ Add Location</button>
                         </div>
                         <div class="table-responsive p-3">
-                            <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-light"><tr><th>Location Name</th><th>Description</th><th>Status</th></tr></thead>
+                            <table class="table table-bordered table-hover align-middle" style="color: var(--text-main); border-color: var(--border-color) !important;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border-color);">
+                                        <th style="cursor:pointer;" onclick="Management.sortLoc('name')">Location Name ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Management.sortLoc('description')">Description ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Management.sortLoc('status')">Status ⇕</th>
+                                    </tr>
+                                </thead>
                                 <tbody id="mgt-locations-tbody"></tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="tab-pane fade" id="tab-shifts" role="tabpanel">
-                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center" style="background: var(--app-bg); border-color: var(--border-color) !important;">
                             <h5 class="m-0 fw-bold">Shifts Management</h5>
                             <div class="d-flex gap-2">
                                 <select class="form-select form-select-sm w-auto shadow-sm" id="mgt-shift-loc-filter" onchange="Management.renderShifts()">
@@ -225,15 +234,23 @@
                             </div>
                         </div>
                         <div class="table-responsive p-3">
-                            <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Status</th></tr></thead>
+                            <table class="table table-bordered table-hover align-middle" style="color: var(--text-main); border-color: var(--border-color) !important;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border-color);">
+                                        <th style="cursor:pointer;" onclick="Management.sortShift('name')">Shift Name ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Management.sortShift('time')">Time Block ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Management.sortShift('defaultCapacity')">Base Capacity ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Management.sortShift('locations')">Assigned Locations ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Management.sortShift('status')">Status ⇕</th>
+                                    </tr>
+                                </thead>
                                 <tbody id="mgt-shifts-tbody"></tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="tab-pane fade p-4" id="tab-settings" role="tabpanel">
-                        <h5 class="fw-bold border-bottom pb-2 mb-3">General App Info</h5>
+                        <h5 class="fw-bold border-bottom pb-2 mb-3" style="border-color: var(--border-color) !important;">General App Info</h5>
                         <div class="row mb-4">
                             <div class="col-md-6 mb-3"><label class="form-label small fw-bold">App Title</label><input type="text" id="set_app_title" class="form-control form-control-sm"></div>
                             <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Company Name</label><input type="text" id="set_company_name" class="form-control form-control-sm"></div>
@@ -241,13 +258,13 @@
                             <div class="col-md-6 mb-3"><label class="form-label small fw-bold">Copyright Year</label><input type="number" id="set_copyright_year" class="form-control form-control-sm"></div>
                         </div>
 
-                        <h5 class="fw-bold border-bottom pb-2 mb-3">Branding & Integrations</h5>
+                        <h5 class="fw-bold border-bottom pb-2 mb-3" style="border-color: var(--border-color) !important;">Branding & Integrations</h5>
                         <div class="row mb-4">
                             <div class="col-md-12 mb-3"><label class="form-label small fw-bold">Brand Logo URL</label><input type="text" id="set_brand_logo_url" class="form-control form-control-sm" placeholder="https://..."></div>
                             <div class="col-md-12 mb-3"><label class="form-label small fw-bold">Google Client ID (Authentication)</label><input type="text" id="set_google_client_id" class="form-control form-control-sm" placeholder="...apps.googleusercontent.com"></div>
                         </div>
 
-                        <h5 class="fw-bold border-bottom pb-2 mb-3">Compliance Rules</h5>
+                        <h5 class="fw-bold border-bottom pb-2 mb-3" style="border-color: var(--border-color) !important;">Compliance Rules</h5>
                         <div class="row mb-4">
                             <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Turnover (Hrs)</label><input type="number" id="set_rule_turnover_hours" class="form-control form-control-sm"></div>
                             <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Overtime (Hrs)</label><input type="number" id="set_rule_overtime_hours" class="form-control form-control-sm"></div>
@@ -257,7 +274,7 @@
 
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <h5 class="fw-bold border-bottom pb-2 mb-3">Light Theme Colors</h5>
+                                <h5 class="fw-bold border-bottom pb-2 mb-3" style="border-color: var(--border-color) !important;">Light Theme Colors</h5>
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_brand_pop" class="form-control form-control-color me-2"><label class="small">Brand Pop (Primary)</label></div>
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_brand_dark" class="form-control form-control-color me-2"><label class="small">Brand Dark (Navbar)</label></div>
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_app_bg" class="form-control form-control-color me-2"><label class="small">App Background</label></div>
@@ -266,7 +283,7 @@
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_light_border" class="form-control form-control-color me-2"><label class="small">Borders</label></div>
                             </div>
                             <div class="col-md-6">
-                                <h5 class="fw-bold border-bottom pb-2 mb-3">Dark Theme Colors</h5>
+                                <h5 class="fw-bold border-bottom pb-2 mb-3" style="border-color: var(--border-color) !important;">Dark Theme Colors</h5>
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_brand_pop" class="form-control form-control-color me-2"><label class="small">Brand Pop (Primary)</label></div>
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_brand_dark" class="form-control form-control-color me-2"><label class="small">Brand Dark (Navbar)</label></div>
                                 <div class="d-flex align-items-center mb-2"><input type="color" id="set_theme_dark_app_bg" class="form-control form-control-color me-2"><label class="small">App Background</label></div>
@@ -279,12 +296,12 @@
                         <button class="btn btn-success mt-2 shadow-sm w-100" id="btn-save-settings" onclick="Management.saveSettings()">Save Configuration</button>
                     </div>
 
-                    <div class="tab-pane fade p-4 bg-light" id="tab-requests" role="tabpanel">
+                    <div class="tab-pane fade p-4" style="background: var(--app-bg);" id="tab-requests" role="tabpanel">
                         <div class="row">
                             <div class="col-md-6 d-flex flex-column mb-3">
                                 <h5 class="fw-bold text-primary mb-3">🏖️ Leave Requests</h5>
-                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted p-5">
-                                    <div class="text-center">
+                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center p-5" style="background: var(--card-bg); color: var(--text-main);">
+                                    <div class="text-center opacity-50">
                                         <div class="fs-1 mb-2">🌴</div>
                                         <p>No pending leave requests.</p>
                                     </div>
@@ -292,8 +309,8 @@
                             </div>
                             <div class="col-md-6 d-flex flex-column mb-3">
                                 <h5 class="fw-bold text-success mb-3">🔄 Shift Trades</h5>
-                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted p-5">
-                                    <div class="text-center">
+                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center p-5" style="background: var(--card-bg); color: var(--text-main);">
+                                    <div class="text-center opacity-50">
                                         <div class="fs-1 mb-2">🤝</div>
                                         <p>No pending shift trades.</p>
                                     </div>
@@ -302,8 +319,8 @@
                         </div>
                     </div>
 
-                    <div class="tab-pane fade p-4 bg-light" id="tab-logs" role="tabpanel">
-                        <div class="d-flex align-items-center justify-content-center text-muted p-5">
+                    <div class="tab-pane fade p-4" style="background: var(--app-bg);" id="tab-logs" role="tabpanel">
+                        <div class="d-flex align-items-center justify-content-center p-5 opacity-50">
                             <div class="text-center">
                                 <div class="fs-1 mb-2">🗄️</div>
                                 <h4>Audit Logs</h4>
@@ -496,7 +513,8 @@
                         <div class="col-6"><label class="form-label small fw-bold">End Time</label><input type="time" id="shift-end" class="form-control"></div>
                     </div>
                     <label class="form-label small fw-bold">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
-                    <select id="shift-locations" class="form-select" multiple size="4"></select>
+                    <select id="shift-locations" class="form-select mb-2" multiple size="4"></select>
+                    <small class="text-danger mt-2 d-block" style="font-size: 0.75rem;"><i>Note: Renaming will automatically update all historical shifts and staff profiles.</i></small>
                 </div>
                 <div class="modal-footer d-flex justify-content-between align-items-center">
                     <div>
@@ -1528,6 +1546,9 @@ const Availability = {
         };
 
         const Management = {
+            locSortCol: 'name', locSortAsc: true,
+            shiftSortCol: 'name', shiftSortAsc: true,
+
             render: () => {
                 Management.renderLocations();
                 Management.renderShifts();
@@ -1539,15 +1560,30 @@ const Availability = {
             },
 
             // --- LOCATIONS ---
+            sortLoc: (col) => {
+                if (Management.locSortCol === col) Management.locSortAsc = !Management.locSortAsc;
+                else { Management.locSortCol = col; Management.locSortAsc = true; }
+                Management.renderLocations();
+            },
             renderLocations: () => {
                 const tbody = document.getElementById('mgt-locations-tbody');
                 if(!tbody) return;
                 tbody.innerHTML = '';
-                STATE.data.locations.forEach(loc => {
+                
+                let filtered = [...STATE.data.locations];
+                filtered.sort((a, b) => {
+                    let valA = String(a[Management.locSortCol] || '').toLowerCase();
+                    let valB = String(b[Management.locSortCol] || '').toLowerCase();
+                    if (valA < valB) return Management.locSortAsc ? -1 : 1;
+                    if (valA > valB) return Management.locSortAsc ? 1 : -1;
+                    return 0;
+                });
+
+                filtered.forEach(loc => {
                     const isActive = String(loc.status).toLowerCase() !== 'disabled';
                     tbody.innerHTML += `<tr style="cursor:pointer;" onclick="Management.openLocationModal('${loc.name}')">
                         <td><strong>${loc.name}</strong></td>
-                        <td><small class="text-muted">${loc.description || ''}</small></td>
+                        <td><small style="color: var(--brand-grey);">${loc.description || ''}</small></td>
                         <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${loc.status || 'Active'}</span></td>
                     </tr>`;
                 });
@@ -1629,6 +1665,11 @@ const Availability = {
             },
 
             // --- SHIFTS ---
+            sortShift: (col) => {
+                if (Management.shiftSortCol === col) Management.shiftSortAsc = !Management.shiftSortAsc;
+                else { Management.shiftSortCol = col; Management.shiftSortAsc = true; }
+                Management.renderShifts();
+            },
             renderShifts: () => {
                 const tbody = document.getElementById('mgt-shifts-tbody');
                 const filter = document.getElementById('mgt-shift-loc-filter').value;
@@ -1641,13 +1682,26 @@ const Availability = {
                     filtered = filtered.filter(s => !s.locations || s.locations.length === 0 || s.locations.includes(filter));
                 }
 
+                filtered.sort((a, b) => {
+                    let valA = a[Management.shiftSortCol];
+                    let valB = b[Management.shiftSortCol];
+                    if (Management.shiftSortCol === 'defaultCapacity') {
+                        valA = Number(valA) || 0; valB = Number(valB) || 0;
+                        return Management.shiftSortAsc ? valA - valB : valB - valA;
+                    }
+                    valA = String(valA || '').toLowerCase(); valB = String(valB || '').toLowerCase();
+                    if (valA < valB) return Management.shiftSortAsc ? -1 : 1;
+                    if (valA > valB) return Management.shiftSortAsc ? 1 : -1;
+                    return 0;
+                });
+
                 filtered.forEach(shift => {
                     const isActive = String(shift.status).toLowerCase() !== 'disabled';
                     tbody.innerHTML += `<tr style="cursor:pointer;" onclick="Management.openShiftModal('${shift.id}')">
                         <td><strong>${shift.name}</strong></td>
                         <td>${shift.time}</td>
                         <td>${shift.defaultCapacity || 1}</td>
-                        <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span class="text-muted fst-italic">Global (All)</span>'}</td>
+                        <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span style="color: var(--brand-grey);" class="fst-italic">Global (All)</span>'}</td>
                         <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${shift.status || 'Active'}</span></td>
                     </tr>`;
                 });
