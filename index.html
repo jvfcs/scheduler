@@ -136,7 +136,7 @@
                     <div class="mb-2"><label>End Time (24H)</label><input type="time" id="edit-end-time" class="form-control"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-danger btn-sm me-auto" data-bs-dismiss="modal" onclick="Scheduler.removeAssignment()">Remove</button>
+                    <button type="button" class="btn btn-danger btn-sm me-auto" onclick="Scheduler.removeAssignment()">Remove</button>
                     <button type="button" class="btn btn-primary btn-sm" onclick="Scheduler.saveAssignmentEdit()">Save</button>
                 </div>
             </div>
@@ -194,7 +194,6 @@
             saveSchedule: async () => {
                 const btn = document.getElementById('btn-save'); btn.innerText = "Saving...";
                 
-                // THE APOSTROPHE HACK: Prevents Google Sheets from corrupting Date/Time fields 
                 const safePayload = STATE.data.assignments.map(a => ({
                     ...a,
                     date: a.date ? `'${a.date}` : '',
@@ -276,44 +275,32 @@
                 return totalMs / (1000 * 60 * 60);
             },
             
+            // EXACT LOGIC RESTORED - ONLY ADDED DYNAMIC RULES
             checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCoverSlot = false) => {
                 const rules = Compliance.getRules();
                 const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
-                targetRange.isCover = isCoverSlot;
-
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
                 if (!isCoverSlot && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
-                let allRanges = staffAssignments.map(a => {
-                    let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
-                    range.isCover = (a.assignedSlot === 'COVER');
-                    return range;
-                });
-                allRanges.push(targetRange);
+                for (let a of staffAssignments) {
+                    const existingRange = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
 
-                let normalRanges = allRanges.filter(r => !r.isCover);
-                normalRanges.sort((a, b) => a.start - b.start);
-
-                const turnoverReqMs = rules.turnoverHours * 60 * 60 * 1000;
-                for (let i = 0; i < normalRanges.length - 1; i++) {
-                    const current = normalRanges[i];
-                    const next = normalRanges[i+1];
-
-                    if (next.start < current.end) {
-                        return { valid: false, reason: "Violation: Time overlap detected with another standard assignment." };
+                    if (TimeUtils.getOverlapMs(targetRange, existingRange) > 0) {
+                         return { valid: false, reason: `Time overlap detected with another assignment on ${a.date}.` };
                     }
-
-                    const gapMs = next.start - current.end;
-                    const gapHours = gapMs / (1000 * 60 * 60);
                     
-                    if (gapHours >= 0 && gapHours < rules.turnoverHours) {
-                        return { valid: false, reason: `Violation: ${rules.turnoverHours}-Hour Turnover Rule. Rest period is only ${gapHours.toFixed(1)} hours.` };
+                    let gap = 0;
+                    if (targetRange.start >= existingRange.end) gap = targetRange.start - existingRange.end;
+                    else if (existingRange.start >= targetRange.end) gap = existingRange.start - targetRange.end;
+
+                    const turnoverReqMs = rules.turnoverHours * 60 * 60 * 1000;
+                    if (gap > 0 && gap < turnoverReqMs) {
+                        return { valid: false, reason: `${rules.turnoverHours}-Hour Turnover Violation against shift on ${a.date}. Rest is only ${(gap/3600000).toFixed(1)} hours.` };
                     }
                 }
-                
                 return { valid: true };
             }
         };
@@ -387,7 +374,7 @@
 
                             const slotAssignments = STATE.data.assignments.filter(a => {
                                 if (a.shiftId !== shift.id || a.date !== dateStr || a.loc !== locFilter) return false;
-                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0 && a.assignedSlot !== 'COVER');
+                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0);
                             });
                             
                             slotAssignments.forEach(assignment => {
@@ -532,6 +519,7 @@
                     }
                 }
 
+                // INTLLIGENT AUTO-TRIM FOR COVERS
                 if (isCoverDrop) {
                     let exist = STATE.data.assignments.filter(a => a.email === email && a.id !== assignId);
                     for (let a of exist) {
@@ -574,7 +562,7 @@
                     const isCover = (assignment.assignedSlot === 'COVER');
                     
                     const check = Compliance.checkDrop(assignment.email, assignment.shiftId, assignment.date, id, newStart, newEnd, isCover);
-                    if (!check.valid) return alert(check.reason);
+                    if (!check.valid) return alert("Cannot edit time: " + check.reason);
 
                     assignment.customStart = newStart;
                     assignment.customEnd = newEnd;
@@ -586,6 +574,7 @@
             removeAssignment: () => {
                 const id = document.getElementById('edit-assignment-id').value;
                 STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('editAssignmentModal')).hide();
                 Scheduler.render();
             },
 
@@ -678,7 +667,7 @@
                             // CLEAN UP GOOGLE SHEETS DATE/TIME AUTO-FORMATTING BUGS
                             ['date', 'customStart', 'customEnd', 'assignedSlot'].forEach(k => {
                                 if (a[k]) {
-                                    let str = String(a[k]).replace(/^'/, ''); // strip safety apostrophe
+                                    let str = String(a[k]).replace(/^'/, ''); 
                                     if (str.includes('T')) {
                                         if (k === 'date') str = str.split('T')[0];
                                         else {
