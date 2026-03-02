@@ -60,11 +60,7 @@
         .staff-pill:active { cursor: grabbing; }
         .staff-pill.pool-item { border-radius: 20px; display: inline-flex; width: auto; padding: 6px 16px; min-height: auto;}
         
-        /* Overtime Warning overrides */
-        .staff-pill.compliance-warning {
-            border: 2px solid var(--brand-accent-red) !important;
-            background-color: #fff0f0 !important; 
-        }
+        .staff-pill.compliance-warning { border: 2px solid var(--brand-accent-red) !important; background-color: #fff0f0 !important; }
         .staff-pill.compliance-warning strong { color: var(--brand-accent-red) !important; }
 
         .split-time { font-size: 0.7rem; opacity: 0.9; font-weight: normal; margin-top: 2px; width: 100%; text-align: center;}
@@ -130,7 +126,7 @@
                     <div class="mb-2"><label>End Time (24H)</label><input type="time" id="edit-end-time" class="form-control"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-danger btn-sm me-auto" onclick="Scheduler.removeAssignment()">Remove</button>
+                    <button type="button" class="btn btn-danger btn-sm me-auto" data-bs-dismiss="modal" onclick="Scheduler.removeAssignment()">Remove</button>
                     <button type="button" class="btn btn-primary btn-sm" onclick="Scheduler.saveAssignmentEdit()">Save</button>
                 </div>
             </div>
@@ -225,7 +221,6 @@
         };
 
         const TimeUtils = {
-            // Strictly maps string to local browser dates to prevent any UTC-shifting anomilies
             getEpoch: (dateStr, timeStr) => { 
                 let [y, mo, d] = dateStr.split('-').map(Number);
                 let [h, m] = timeStr.split(':').map(Number);
@@ -236,6 +231,11 @@
                 let end = TimeUtils.getEpoch(dateStr, endStr);
                 if (end <= start) end += (24 * 60 * 60 * 1000); 
                 return { start, end };
+            },
+            getOverlapMs: (range1, range2) => {
+                let start = Math.max(range1.start, range2.start);
+                let end = Math.min(range1.end, range2.end);
+                return Math.max(0, end - start);
             }
         };
 
@@ -251,52 +251,34 @@
                 return totalMs / (1000 * 60 * 60);
             },
             
-            checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCover = false) => {
+            checkDrop: (email, targetShiftId, targetDateStr, editAssignId = null, testStart = null, testEnd = null, isCoverSlot = false) => {
                 const targetRange = TimeUtils.getRange(targetDateStr, testStart, testEnd);
-                targetRange.isCover = isCover;
-
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
-                // 1. Shift Block Check (Prevent Double-Assignment in same NON-cover slot)
-                if (!isCover && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
+                // Block double assignment to the EXACT SAME normal shift block
+                if (!isCoverSlot && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
-                // 2. Build Chronological Timeline for this Staff Member
-                let allRanges = staffAssignments.map(a => {
-                    let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
-                    range.isCover = (a.assignedSlot === 'COVER');
-                    return range;
-                });
-                allRanges.push(targetRange);
+                // UNIVERSAL RULE ENGINE: Checks all ranges regardless of Cover vs Normal
+                for (let a of staffAssignments) {
+                    const existingRange = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
 
-                // 3. FILTER OUT COVERS BEFORE EVALUATING TURNAROUND
-                // Covers are completely invisible to the 8hr rule and overlap rule!
-                let normalRanges = allRanges.filter(r => !r.isCover);
-
-                // Sort strictly by start time
-                normalRanges.sort((a, b) => a.start - b.start);
-
-                // 4. Absolute Overlap and Turnover Checks on Normal Shifts ONLY
-                const eightHours = 8 * 60 * 60 * 1000;
-                for (let i = 0; i < normalRanges.length - 1; i++) {
-                    const current = normalRanges[i];
-                    const next = normalRanges[i+1];
-
-                    // Physical Overlap Check
-                    if (next.start < current.end) {
-                        return { valid: false, reason: "Violation: Time overlap detected with another standard assignment." };
+                    // 1. Hard Physical Overlap Block
+                    if (TimeUtils.getOverlapMs(targetRange, existingRange) > 0) {
+                         return { valid: false, reason: `Time overlap detected with another assignment on ${a.date}.` };
                     }
-
-                    // 8-Hour Gap Check (gap >= 0 prevents back-to-back double shifts without rest)
-                    const gapMs = next.start - current.end;
-                    const gapHours = gapMs / (1000 * 60 * 60);
                     
-                    if (gapHours >= 0 && gapHours < 8) {
-                        return { valid: false, reason: `Violation: 8-Hour Turnover Rule. Rest period is only ${gapHours.toFixed(1)} hours.` };
+                    // 2. 8-Hour Turnover Rule
+                    let gap = 0;
+                    if (targetRange.start >= existingRange.end) gap = targetRange.start - existingRange.end;
+                    else if (existingRange.start >= targetRange.end) gap = existingRange.start - targetRange.end;
+
+                    const eightHours = 8 * 60 * 60 * 1000;
+                    if (gap > 0 && gap < eightHours) {
+                        return { valid: false, reason: `8-Hour Turnover Violation against shift on ${a.date}. Rest is only ${(gap/3600000).toFixed(1)} hours.` };
                     }
                 }
-                
                 return { valid: true };
             }
         };
@@ -358,7 +340,6 @@
                         
                         const slots = (shift.slots && shift.slots.length > 0) ? shift.slots : [shift.time];
                         
-                        // 1. Render Normal Slots
                         slots.forEach((slotTime, index) => {
                             const [sStart, sEnd] = slotTime.split('-');
                             const slotDiv = document.createElement('div');
@@ -382,7 +363,6 @@
                             cell.appendChild(slotDiv);
                         });
 
-                        // 2. Render Dedicated Cover Zone
                         const coverDiv = document.createElement('div');
                         coverDiv.className = 'slot-zone cover-zone';
                         coverDiv.innerHTML = `<div class="slot-label cover-label">Cover Section</div>`;
@@ -401,7 +381,6 @@
                         });
                         cell.appendChild(coverDiv);
 
-                        // Cell Capacity Label
                         const cellAssignments = STATE.data.assignments.filter(a => a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter && a.assignedSlot !== 'COVER');
                         const effectiveCap = Scheduler.getCapacity(shift.id, dateStr);
                         const capDiv = document.createElement('div');
@@ -497,6 +476,16 @@
                     return;
                 }
 
+                let assignId = null;
+                let email = null;
+                if (source === 'pool') {
+                    email = e.dataTransfer.getData("email");
+                } else if (source === 'grid') {
+                    assignId = e.dataTransfer.getData("assignmentId");
+                    const assignment = STATE.data.assignments.find(a => a.id === assignId);
+                    email = assignment.email;
+                }
+
                 if (!isCoverDrop) {
                     const effCap = Scheduler.getCapacity(targetShiftId, targetDateStr);
                     const currentCount = STATE.data.assignments.filter(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.loc === locFilter && a.assignedSlot !== 'COVER').length;
@@ -505,11 +494,23 @@
                     }
                 }
 
-                if (source === 'pool') {
-                    const email = e.dataTransfer.getData("email");
-                    const check = Compliance.checkDrop(email, targetShiftId, targetDateStr, null, targetStart, targetEnd, isCoverDrop);
-                    if (!check.valid) return alert(check.reason);
+                // INTLLIGENT AUTO-TRIM FOR COVERS
+                if (isCoverDrop) {
+                    let exist = STATE.data.assignments.filter(a => a.email === email && a.id !== assignId);
+                    for (let a of exist) {
+                        let eRange = TimeUtils.getRange(a.date, a.customStart, a.customEnd);
+                        let tRange = TimeUtils.getRange(targetDateStr, targetStart, targetEnd);
+                        if (TimeUtils.getOverlapMs(tRange, eRange) > 0) {
+                            let d = new Date(eRange.end);
+                            targetStart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                        }
+                    }
+                }
 
+                const check = Compliance.checkDrop(email, targetShiftId, targetDateStr, assignId, targetStart, targetEnd, isCoverDrop);
+                if (!check.valid) return alert(check.reason);
+
+                if (source === 'pool') {
                     STATE.data.assignments.push({
                         id: 'A_' + Date.now(),
                         email: email, shiftId: targetShiftId, date: targetDateStr, loc: locFilter,
@@ -517,12 +518,7 @@
                         customStart: targetStart, customEnd: targetEnd
                     });
                 } else if (source === 'grid') {
-                    const assignId = e.dataTransfer.getData("assignmentId");
                     const assignment = STATE.data.assignments.find(a => a.id === assignId);
-                    
-                    const check = Compliance.checkDrop(assignment.email, targetShiftId, targetDateStr, assignId, targetStart, targetEnd, isCoverDrop);
-                    if (!check.valid) return alert(check.reason);
-
                     assignment.shiftId = targetShiftId; 
                     assignment.date = targetDateStr;
                     assignment.assignedSlot = isCoverDrop ? 'COVER' : `${targetStart}-${targetEnd}`; 
@@ -541,25 +537,19 @@
                     const isCover = (assignment.assignedSlot === 'COVER');
                     
                     const check = Compliance.checkDrop(assignment.email, assignment.shiftId, assignment.date, id, newStart, newEnd, isCover);
-                    if (!check.valid) return alert(check.reason);
+                    if (!check.valid) return alert("Cannot edit time: " + check.reason);
 
                     assignment.customStart = newStart;
                     assignment.customEnd = newEnd;
                 }
-                const modal = bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal'));
-                if (modal) modal.hide();
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('editAssignmentModal')).hide();
                 Scheduler.render();
             },
             
             removeAssignment: () => {
                 const id = document.getElementById('edit-assignment-id').value;
                 STATE.data.assignments = STATE.data.assignments.filter(a => a.id !== id);
-                
-                const modal = bootstrap.Modal.getInstance(document.getElementById('editAssignmentModal'));
-                if (modal) modal.hide();
-                
-                // Allow Bootstrap fading backdrop to detach before heavy DOM redraw
-                setTimeout(() => Scheduler.render(), 200);
+                Scheduler.render();
             },
 
             addCustomShift: () => {
