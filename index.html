@@ -112,10 +112,7 @@
                     <button class="btn btn-sm btn-outline-primary ms-2" onclick="Calendar.goToday()">Today</button>
                 </div>
                 <div>
-                    <select class="form-select form-select-sm d-inline-block w-auto me-2" id="loc-filter" onchange="Scheduler.render()">
-                        <option value="LOC_A">Location A</option>
-                        <option value="LOC_B">Location B</option>
-                    </select>
+                    <select class="form-select form-select-sm d-inline-block w-auto me-2" id="loc-filter" onchange="Scheduler.render()"></select>
                     <button class="btn btn-sm btn-primary" onclick="UI.openAddShiftModal()">+ Add Custom Shift</button>
                 </div>
             </div>
@@ -235,7 +232,7 @@
 
     <script>
         const STATE = {
-            data: { shifts: [], staff: [], assignments: [], template: {}, availability: [] },
+            data: { locations: [], shifts: [], staff: [], assignments: [], template: {}, availability: [] },
             capacityOverrides: {},
             currentWeekStart: new Date()
         };
@@ -480,6 +477,18 @@ const Availability = {
             openAddShiftModal: () => {
                 document.getElementById('new-shift-name').value = '';
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('addShiftModal')).show();
+            },
+            renderLocationDropdown: () => {
+                const select = document.getElementById('loc-filter');
+                select.innerHTML = '';
+                const activeLocs = STATE.data.locations.filter(l => String(l.status).toLowerCase() !== 'disabled');
+                if (activeLocs.length === 0) {
+                    select.innerHTML = `<option value="">No Locations</option>`;
+                    return;
+                }
+                activeLocs.forEach(loc => {
+                    select.innerHTML += `<option value="${loc.name}">${loc.name}</option>`;
+                });
             }
         };
 
@@ -507,7 +516,8 @@ const Availability = {
                     canvas.appendChild(div);
                 });
 
-                STATE.data.shifts.forEach(shift => {
+                const visibleShifts = STATE.data.shifts.filter(s => !s.locations || s.locations.length === 0 || s.locations.includes(locFilter));
+                visibleShifts.forEach(shift => {
                     const shiftCell = document.createElement('div');
                     shiftCell.className = 'shift-label';
                     shiftCell.innerHTML = `<div>${shift.name}<br><small class="text-muted">${shift.time}</small></div>`;
@@ -820,6 +830,11 @@ const Availability = {
                                 try { s.slots = JSON.parse(s.slots); } 
                                 catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
                             } else if (!Array.isArray(s.slots)) { s.slots = []; }
+                            
+                            if (s.locations && typeof s.locations === 'string') { 
+                                try { s.locations = JSON.parse(s.locations); } 
+                                catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
+                            } else if (!Array.isArray(s.locations)) { s.locations = []; }
                         });
                     } else { STATE.data.shifts = []; }
 if (Array.isArray(STATE.data.availability)) { 
@@ -857,6 +872,7 @@ if (Array.isArray(STATE.data.availability)) {
                     } else { STATE.data.assignments = []; }
                 }
                 
+                UI.renderLocationDropdown();
                 App.applyWhiteLabel();
                 document.getElementById('loading-overlay').style.opacity = '0';
                 setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
