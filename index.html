@@ -120,7 +120,7 @@
             <span class="sync-indicator ms-2" id="sync-icon">● Syncing</span>
             <div class="ms-4 d-none d-md-flex gap-2">
                 <button class="btn btn-sm btn-outline-light" onclick="App.navigate('scheduler')">Scheduler</button>
-                <button class="btn btn-sm btn-outline-light" onclick="App.navigate('availability')">Staff Management</button>
+                <button class="btn btn-sm btn-outline-light" onclick="App.navigate('management')">Admin Portal</button>
             </div>
             <div class="d-flex align-items-center ms-auto">
                 <button class="btn btn-sm btn-outline-light me-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
@@ -153,33 +153,145 @@
             <footer class="mt-4 mb-2 text-center text-muted small" id="ui-footer"></footer>
         </div>
     </div>
-<div id="view-availability" class="view-container" style="display: none;">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="m-0">Staff Management</h3>
-                <div class="d-flex gap-2">
-                    <select class="form-select form-select-sm w-auto" id="avail-loc-filter" onchange="Availability.render()">
-                        <option value="ALL">Everywhere / Global</option>
-                    </select>
-                    <button class="btn btn-sm btn-primary" onclick="Availability.openModal('')">+ Add Staff</button>
-                </div>
+<div id="view-management" class="view-container" style="display: none;">
+        <div class="container-fluid h-100 d-flex flex-column p-0">
+            <div class="d-flex align-items-center mb-3 px-3">
+                <h3 class="m-0 text-primary fw-bold"><span class="fs-4">⚙️</span> Management Portal</h3>
             </div>
-            <div class="table-responsive bg-white rounded border">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('status')">Status ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('locations')">Location ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('prefShifts')">Preferred Shifts ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('prefDays')">Preferred Days Off ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('leaveStart')">Leave Range ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('currentHrs')">Curr Wk Hrs ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('nextHrs')">Next Wk Hrs ⇕</th>
-                        </tr>
-                    </thead>
-                    <tbody id="availability-tbody"></tbody>
-                </table>
+            
+            <div class="d-flex flex-column flex-md-row gap-3 flex-grow-1 px-3 pb-3" style="min-height: 0;">
+                <div class="nav flex-column nav-pills shadow-sm rounded bg-white p-2 border" role="tablist" aria-orientation="vertical" style="min-width: 220px; max-height: max-content;">
+                    <button class="nav-link active text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-staff" type="button" onclick="Availability.render()">👥 Staff Roster</button>
+                    <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-locations" type="button" onclick="Management.renderLocations()">🏢 Locations</button>
+                    <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-shifts" type="button" onclick="Management.renderShifts()">⏰ Shifts & Times</button>
+                    <button class="nav-link text-start mb-1 fw-bold" data-bs-toggle="pill" data-bs-target="#tab-settings" type="button" onclick="Management.renderSettings()">🎨 Theme & Rules</button>
+                    <hr class="my-2">
+                    <button class="nav-link text-start mb-1 fw-bold text-success" data-bs-toggle="pill" data-bs-target="#tab-requests" type="button">📥 Approvals <span class="badge bg-danger ms-1">3</span></button>
+                    <button class="nav-link text-start fw-bold text-muted" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button">🗄️ Audit Logs</button>
+                </div>
+
+                <div class="tab-content flex-grow-1 bg-white rounded border shadow-sm p-0 overflow-hidden d-flex flex-column" id="v-pills-tabContent">
+                    
+                    <div class="tab-pane fade show active h-100 d-flex flex-column" id="tab-staff" role="tabpanel">
+                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                            <h5 class="m-0 fw-bold">Staff Management</h5>
+                            <div class="d-flex gap-2">
+                                <select class="form-select form-select-sm w-auto shadow-sm" id="avail-loc-filter" onchange="Availability.render()">
+                                    <option value="ALL">Everywhere / Global</option>
+                                </select>
+                                <button class="btn btn-sm btn-primary shadow-sm" onclick="Availability.openModal('')">+ Add Staff</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive flex-grow-1" style="overflow-y: auto;">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light position-sticky top-0" style="z-index: 1;">
+                                    <tr>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('status')">Status ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('locations')">Location ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('prefShifts')">Preferred Shifts ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('prefDays')">Preferred Days Off ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('leaveStart')">Leave Range ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('currentHrs')">Curr Wk Hrs ⇕</th>
+                                        <th style="cursor:pointer;" onclick="Availability.sort('nextHrs')">Next Wk Hrs ⇕</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="availability-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade h-100 d-flex flex-column" id="tab-locations" role="tabpanel">
+                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                            <h5 class="m-0 fw-bold">Locations Management</h5>
+                            <button class="btn btn-sm btn-primary shadow-sm" disabled>+ Add Location (WIP)</button>
+                        </div>
+                        <div class="table-responsive flex-grow-1 p-3">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead class="table-light"><tr><th>Location Name</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody id="mgt-locations-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade h-100 d-flex flex-column" id="tab-shifts" role="tabpanel">
+                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
+                            <h5 class="m-0 fw-bold">Shifts Management</h5>
+                            <button class="btn btn-sm btn-primary shadow-sm" disabled>+ Add Standard Shift (WIP)</button>
+                        </div>
+                        <div class="table-responsive flex-grow-1 p-3">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Actions</th></tr></thead>
+                                <tbody id="mgt-shifts-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade h-100 overflow-auto p-4" id="tab-settings" role="tabpanel">
+                        <h5 class="fw-bold border-bottom pb-2 mb-3">White-Label & Theme</h5>
+                        <div class="row mb-4">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">App Title</label>
+                                <input type="text" id="set-app-title" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Company Name</label>
+                                <input type="text" id="set-company" class="form-control">
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label">Brand Logo URL</label>
+                                <input type="text" id="set-logo" class="form-control" placeholder="https://...">
+                            </div>
+                        </div>
+                        
+                        <h5 class="fw-bold border-bottom pb-2 mb-3">Compliance Rules Engine</h5>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Weekly Overtime Threshold (Hours)</label>
+                                <input type="number" id="set-ot-hours" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Minimum Turnaround Time (Hours)</label>
+                                <input type="number" id="set-turnover" class="form-control">
+                            </div>
+                        </div>
+                        <button class="btn btn-success mt-3 shadow-sm" disabled>Save Configuration (WIP)</button>
+                    </div>
+
+                    <div class="tab-pane fade h-100 overflow-auto p-4 bg-light" id="tab-requests" role="tabpanel">
+                        <div class="row h-100">
+                            <div class="col-md-6 d-flex flex-column">
+                                <h5 class="fw-bold text-primary mb-3">🏖️ Leave Requests</h5>
+                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted">
+                                    <div class="text-center">
+                                        <div class="fs-1 mb-2">🌴</div>
+                                        <p>No pending leave requests.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 d-flex flex-column mt-3 mt-md-0">
+                                <h5 class="fw-bold text-success mb-3">🔄 Shift Trades</h5>
+                                <div class="card shadow-sm border-0 flex-grow-1 d-flex align-items-center justify-content-center text-muted">
+                                    <div class="text-center">
+                                        <div class="fs-1 mb-2">🤝</div>
+                                        <p>No pending shift trades.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade h-100 overflow-auto p-4 bg-light" id="tab-logs" role="tabpanel">
+                        <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                            <div class="text-center">
+                                <div class="fs-1 mb-2">🗄️</div>
+                                <h4>Audit Logs</h4>
+                                <p>Coming Soon. Track who edited shifts, changed capacities, or disabled staff.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </div>
@@ -1339,13 +1451,55 @@ const Availability = {
             }
         };
 
+        const Management = {
+            render: () => {
+                Management.renderLocations();
+                Management.renderShifts();
+                Management.renderSettings();
+            },
+            renderLocations: () => {
+                const tbody = document.getElementById('mgt-locations-tbody');
+                if(!tbody) return;
+                tbody.innerHTML = '';
+                STATE.data.locations.forEach(loc => {
+                    tbody.innerHTML += `<tr>
+                        <td><strong>${loc.name}</strong></td>
+                        <td><span class="badge ${String(loc.status).toLowerCase() === 'active' ? 'bg-success' : 'bg-danger'}">${loc.status || 'Active'}</span></td>
+                        <td><button class="btn btn-sm btn-outline-primary" disabled>Edit</button></td>
+                    </tr>`;
+                });
+            },
+            renderShifts: () => {
+                const tbody = document.getElementById('mgt-shifts-tbody');
+                if(!tbody) return;
+                tbody.innerHTML = '';
+                STATE.data.shifts.forEach(shift => {
+                    tbody.innerHTML += `<tr>
+                        <td><strong>${shift.name}</strong></td>
+                        <td>${shift.time}</td>
+                        <td>${shift.defaultCapacity || 1}</td>
+                        <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span class="text-muted fst-italic">Global (All)</span>'}</td>
+                        <td><button class="btn btn-sm btn-outline-primary" disabled>Edit</button></td>
+                    </tr>`;
+                });
+            },
+            renderSettings: () => {
+                const t = STATE.data.template || {};
+                document.getElementById('set-app-title').value = t.app_title || '';
+                document.getElementById('set-company').value = t.company_name || '';
+                document.getElementById('set-logo').value = t.brand_logo_url || '';
+                document.getElementById('set-ot-hours').value = t.rule_overtime_hours || '40';
+                document.getElementById('set-turnover').value = t.rule_turnover_hours || '8';
+            }
+        };
+
         const App = { 
             toggleTheme: () => document.documentElement.setAttribute('data-bs-theme', document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'),
             navigate: (viewId) => {
                 document.querySelectorAll('.view-container').forEach(el => el.style.display = 'none');
                 document.getElementById('view-' + viewId).style.display = 'block';
                 if(viewId === 'scheduler') Scheduler.render();
-                if(viewId === 'availability') Availability.render();
+                if(viewId === 'management') { Availability.render(); Management.render(); }
             },
             
             applyWhiteLabel: () => {
