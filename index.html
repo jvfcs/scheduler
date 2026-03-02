@@ -153,7 +153,7 @@
             <footer class="mt-4 mb-2 text-center text-muted small" id="ui-footer"></footer>
         </div>
     </div>
-<div id="view-management" class="view-container" style="display: none;">
+<div id="view-management" style="display: none; padding: 1rem;">
         <div class="container-fluid p-0">
             <div class="d-flex align-items-center mb-3 px-3">
                 <h3 class="m-0 text-primary fw-bold"><span class="fs-4">⚙️</span> Management Portal</h3>
@@ -208,7 +208,7 @@
                         </div>
                         <div class="table-responsive p-3">
                             <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-light"><tr><th>Location Name</th><th>Description</th><th>Status</th><th style="width: 100px;">Actions</th></tr></thead>
+                                <thead class="table-light"><tr><th>Location Name</th><th>Description</th><th>Status</th></tr></thead>
                                 <tbody id="mgt-locations-tbody"></tbody>
                             </table>
                         </div>
@@ -226,7 +226,7 @@
                         </div>
                         <div class="table-responsive p-3">
                             <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Status</th><th style="width: 100px;">Actions</th></tr></thead>
+                                <thead class="table-light"><tr><th>Shift Name</th><th>Time Block</th><th>Base Capacity</th><th>Assigned Locations</th><th>Status</th></tr></thead>
                                 <tbody id="mgt-shifts-tbody"></tbody>
                             </table>
                         </div>
@@ -465,9 +465,18 @@
                     <input type="text" id="loc-name" class="form-control mb-2">
                     <label class="form-label small fw-bold">Description</label>
                     <textarea id="loc-desc" class="form-control" rows="2"></textarea>
-                    <small class="text-danger mt-2 d-block"><i>Note: Renaming a location will automatically update all historical shifts and staff profiles assigned to it.</i></small>
+                    <small class="text-danger mt-2 d-block" style="font-size: 0.75rem;"><i>Note: Renaming will automatically update all historical shifts and staff profiles.</i></small>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm w-100" onclick="Management.saveLocation()">Save Location</button></div>
+                <div class="modal-footer d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="form-check form-switch fs-5 mb-0 pb-0 d-flex align-items-center">
+                            <input class="form-check-input shadow-none mt-0" type="checkbox" role="switch" id="loc-status-toggle" onchange="Management.handleLocStatusToggle(this)">
+                            <label class="form-check-label ms-2 d-flex align-items-center" for="loc-status-toggle"><span id="loc-status-label" class="badge bg-success">Active</span></label>
+                        </div>
+                        <span id="loc-future-warning" class="badge bg-danger mt-1 d-none text-wrap text-start" style="font-size: 0.65rem;">⚠️ Has Future Shifts</span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Management.saveLocation()">Save Location</button>
+                </div>
             </div>
         </div>
     </div>
@@ -489,7 +498,16 @@
                     <label class="form-label small fw-bold">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
                     <select id="shift-locations" class="form-select" multiple size="4"></select>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm w-100" onclick="Management.saveShift()">Save Shift Template</button></div>
+                <div class="modal-footer d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="form-check form-switch fs-5 mb-0 pb-0 d-flex align-items-center">
+                            <input class="form-check-input shadow-none mt-0" type="checkbox" role="switch" id="shift-status-toggle" onchange="Management.handleShiftStatusToggle(this)">
+                            <label class="form-check-label ms-2 d-flex align-items-center" for="shift-status-toggle"><span id="shift-status-label" class="badge bg-success">Active</span></label>
+                        </div>
+                        <span id="shift-future-warning" class="badge bg-danger mt-1 d-none text-wrap text-start" style="font-size: 0.65rem;">⚠️ Has Future Shifts</span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Management.saveShift()">Save Shift Template</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1515,7 +1533,6 @@ const Availability = {
                 Management.renderShifts();
                 Management.renderSettings();
                 
-                // Populate Dropdowns in management
                 const shiftFilter = document.getElementById('mgt-shift-loc-filter');
                 shiftFilter.innerHTML = '<option value="ALL">Everywhere / Global</option>';
                 STATE.data.locations.forEach(loc => { shiftFilter.innerHTML += `<option value="${loc.name}">${loc.name}</option>`; });
@@ -1532,45 +1549,57 @@ const Availability = {
                         <td><strong>${loc.name}</strong></td>
                         <td><small class="text-muted">${loc.description || ''}</small></td>
                         <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${loc.status || 'Active'}</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-${isActive ? 'danger' : 'success'}" onclick="event.stopPropagation(); Management.toggleLocation('${loc.name}')">${isActive ? 'Disable' : 'Enable'}</button>
-                        </td>
                     </tr>`;
                 });
             },
-            toggleLocation: async (name) => {
-                const loc = STATE.data.locations.find(l => l.name === name);
-                if (loc) {
-                    loc.status = String(loc.status).toLowerCase() === 'active' ? 'Disabled' : 'Active';
-                    Management.renderLocations();
-                    await API.call('SAVE_LOCATIONS', { locations: STATE.data.locations });
-                    UI.renderLocationDropdown(); Availability.renderLocationDropdown();
+            handleLocStatusToggle: (toggleEl) => {
+                const label = document.getElementById('loc-status-label');
+                const warnBadge = document.getElementById('loc-future-warning');
+                const locName = document.getElementById('loc-orig-name').value;
+
+                if (toggleEl.checked) {
+                    label.innerText = 'Active'; label.className = 'badge bg-success';
+                    if(warnBadge) warnBadge.classList.add('d-none');
+                } else {
+                    label.innerText = 'Disabled'; label.className = 'badge bg-danger';
+                    if (locName) {
+                        const hasFuture = STATE.data.assignments.some(a => a.loc === locName && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > Date.now());
+                        if (hasFuture && warnBadge) warnBadge.classList.remove('d-none');
+                        else if (warnBadge) warnBadge.classList.add('d-none');
+                    }
                 }
             },
             openLocationModal: (name = null) => {
-                const loc = STATE.data.locations.find(l => l.name === name) || { name: '', description: '' };
+                const loc = STATE.data.locations.find(l => l.name === name) || { name: '', description: '', status: 'Active' };
                 document.getElementById('loc-modal-title').innerText = name ? 'Edit Location' : 'Add New Location';
                 document.getElementById('loc-orig-name').value = name || '';
                 document.getElementById('loc-name').value = loc.name;
                 document.getElementById('loc-desc').value = loc.description || '';
+                
+                const statusToggle = document.getElementById('loc-status-toggle');
+                statusToggle.checked = (loc.status || 'Active') === 'Active';
+                Management.handleLocStatusToggle(statusToggle);
+
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('mgtLocationModal')).show();
             },
             saveLocation: async () => {
                 const origName = document.getElementById('loc-orig-name').value;
                 const newName = document.getElementById('loc-name').value.trim();
                 const desc = document.getElementById('loc-desc').value.trim();
+                const newStatus = document.getElementById('loc-status-toggle').checked ? 'Active' : 'Disabled';
+                
                 if(!newName) return alert("Location name is required.");
 
                 let deepSaveRequired = false;
 
                 if (!origName) {
-                    STATE.data.locations.push({ name: newName, description: desc, status: 'Active' });
+                    STATE.data.locations.push({ name: newName, description: desc, status: newStatus });
                 } else {
                     const loc = STATE.data.locations.find(l => l.name === origName);
                     loc.name = newName;
                     loc.description = desc;
+                    loc.status = newStatus;
 
-                    // Deep propagate name change
                     if (origName !== newName) {
                         deepSaveRequired = true;
                         STATE.data.staff.forEach(s => { if(s.locations && s.locations.includes(origName)) s.locations[s.locations.indexOf(origName)] = newName; });
@@ -1607,7 +1636,6 @@ const Availability = {
                 tbody.innerHTML = '';
                 
                 let filtered = STATE.data.shifts;
-                // Exclude custom shifts added directly from the calendar UI
                 filtered = filtered.filter(s => !String(s.id).includes('CUSTOM'));
                 if (filter !== 'ALL') {
                     filtered = filtered.filter(s => !s.locations || s.locations.length === 0 || s.locations.includes(filter));
@@ -1621,20 +1649,28 @@ const Availability = {
                         <td>${shift.defaultCapacity || 1}</td>
                         <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span class="text-muted fst-italic">Global (All)</span>'}</td>
                         <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${shift.status || 'Active'}</span></td>
-                        <td><button class="btn btn-sm btn-outline-${isActive ? 'danger' : 'success'}" onclick="event.stopPropagation(); Management.toggleShift('${shift.id}')">${isActive ? 'Disable' : 'Enable'}</button></td>
                     </tr>`;
                 });
             },
-            toggleShift: async (id) => {
-                const shift = STATE.data.shifts.find(s => s.id === id);
-                if (shift) {
-                    shift.status = String(shift.status).toLowerCase() === 'active' ? 'Disabled' : 'Active';
-                    Management.renderShifts();
-                    await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+            handleShiftStatusToggle: (toggleEl) => {
+                const label = document.getElementById('shift-status-label');
+                const warnBadge = document.getElementById('shift-future-warning');
+                const shiftId = document.getElementById('shift-id').value;
+
+                if (toggleEl.checked) {
+                    label.innerText = 'Active'; label.className = 'badge bg-success';
+                    if(warnBadge) warnBadge.classList.add('d-none');
+                } else {
+                    label.innerText = 'Disabled'; label.className = 'badge bg-danger';
+                    if (shiftId) {
+                        const hasFuture = STATE.data.assignments.some(a => a.shiftId === shiftId && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > Date.now());
+                        if (hasFuture && warnBadge) warnBadge.classList.remove('d-none');
+                        else if (warnBadge) warnBadge.classList.add('d-none');
+                    }
                 }
             },
             openShiftModal: (id = null) => {
-                const shift = STATE.data.shifts.find(s => s.id === id) || { id: '', name: '', time: '09:00-17:00', defaultCapacity: 1, locations: [] };
+                const shift = STATE.data.shifts.find(s => s.id === id) || { id: '', name: '', time: '09:00-17:00', defaultCapacity: 1, locations: [], status: 'Active' };
                 document.getElementById('shift-modal-title').innerText = id ? 'Edit Shift Template' : 'Add Shift Template';
                 document.getElementById('shift-id').value = shift.id;
                 document.getElementById('shift-name').value = shift.name;
@@ -1650,30 +1686,64 @@ const Availability = {
                 const selectedLocs = shift.locations || [];
                 Array.from(locSelect.options).forEach(opt => { if (selectedLocs.includes(opt.value)) opt.selected = true; });
 
+                const statusToggle = document.getElementById('shift-status-toggle');
+                statusToggle.checked = (shift.status || 'Active') === 'Active';
+                Management.handleShiftStatusToggle(statusToggle);
+
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('mgtShiftModal')).show();
             },
             saveShift: async () => {
                 const id = document.getElementById('shift-id').value;
-                const name = document.getElementById('shift-name').value;
+                const name = document.getElementById('shift-name').value.trim();
                 const start = document.getElementById('shift-start').value;
                 const end = document.getElementById('shift-end').value;
                 const cap = document.getElementById('shift-cap').value;
                 const locations = Array.from(document.getElementById('shift-locations').selectedOptions).map(opt => opt.value);
+                const newStatus = document.getElementById('shift-status-toggle').checked ? 'Active' : 'Disabled';
                 
                 if (!name || !start || !end) return alert("Name and times are required.");
 
                 const timeStr = `${start}-${end}`;
+                let deepSaveRequired = false;
 
                 if (!id) {
-                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: [timeStr], defaultCapacity: parseInt(cap), locations: locations, status: 'Active' });
+                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: [timeStr], defaultCapacity: parseInt(cap), locations: locations, status: newStatus });
                 } else {
                     const shift = STATE.data.shifts.find(s => s.id === id);
-                    shift.name = name; shift.time = timeStr; shift.slots = [timeStr]; shift.defaultCapacity = parseInt(cap); shift.locations = locations;
+                    const origName = shift.name;
+                    
+                    shift.name = name; shift.time = timeStr; shift.slots = [timeStr]; shift.defaultCapacity = parseInt(cap); shift.locations = locations; shift.status = newStatus;
+
+                    if (origName !== name) {
+                        deepSaveRequired = true;
+                        STATE.data.availability.forEach(a => {
+                            if (a.prefShifts) {
+                                let prefs = a.prefShifts.split(', ');
+                                let idx = prefs.indexOf(origName);
+                                if (idx !== -1) {
+                                    prefs[idx] = name;
+                                    a.prefShifts = prefs.join(', ');
+                                }
+                            }
+                        });
+                    }
                 }
 
                 bootstrap.Modal.getInstance(document.getElementById('mgtShiftModal')).hide();
                 Management.renderShifts();
+                
+                document.getElementById('loading-text').innerText = "Saving Shift Template...";
+                document.getElementById('loading-overlay').style.display = 'flex'; document.getElementById('loading-overlay').style.opacity = '1';
+
                 await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+                
+                if (deepSaveRequired) {
+                    const safeAvail = STATE.data.availability.map(a => ({ ...a, leaveStart: a.leaveStart ? `'${a.leaveStart}` : '', leaveEnd: a.leaveEnd ? `'${a.leaveEnd}` : '' }));
+                    await API.call('SAVE_AVAILABILITY', { availability: safeAvail });
+                }
+
+                document.getElementById('loading-overlay').style.opacity = '0'; setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
+                Scheduler.render();
             },
 
             // --- THEMES & RULES ---
