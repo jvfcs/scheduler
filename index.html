@@ -628,13 +628,10 @@ const Availability = {
                 // Initialize the Status Toggle Switch
                 const statusToggle = document.getElementById('staff-status-toggle');
                 statusToggle.checked = (staff.status || 'Active') === 'Active';
-                Availability.handleStatusToggle(statusToggle);
                 document.getElementById('staff-status-log').innerText = staff.statusLog || 'New Record';
                 
-                const hasFuture = STATE.data.assignments.some(a => a.email === email && staff.disabledEpoch && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > Number(staff.disabledEpoch));
-                const warnBadge = document.getElementById('staff-future-shifts-warning');
-                if (staff.status === 'Disabled' && hasFuture) warnBadge.classList.remove('d-none');
-                else warnBadge.classList.add('d-none');
+                // Let the upgraded toggle handler do the live math for the badge
+                Availability.handleStatusToggle(statusToggle); 
 
                 const locSelect = document.getElementById('staff-locations');
                 locSelect.innerHTML = '';
@@ -691,12 +688,31 @@ const Availability = {
             },
             handleStatusToggle: (toggleEl) => {
                 const label = document.getElementById('staff-status-label');
+                const warnBadge = document.getElementById('staff-future-shifts-warning');
+                const currentEmail = document.getElementById('avail-email-hidden').value;
+
                 if (toggleEl.checked) {
                     label.innerText = 'Active';
                     label.className = 'badge bg-success';
+                    if (warnBadge) warnBadge.classList.add('d-none');
                 } else {
                     label.innerText = 'Disabled';
                     label.className = 'badge bg-danger';
+                    
+                    // Live check for future shifts
+                    if (currentEmail) {
+                        const staffRecord = STATE.data.staff.find(s => s.email === currentEmail);
+                        
+                        // If they are already disabled in the database, use their historical timestamp. Otherwise, use right now.
+                        const checkEpoch = (staffRecord && staffRecord.status === 'Disabled' && staffRecord.disabledEpoch) 
+                            ? Number(staffRecord.disabledEpoch) 
+                            : Date.now();
+                            
+                        const hasFuture = STATE.data.assignments.some(a => a.email === currentEmail && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > checkEpoch);
+                        
+                        if (hasFuture && warnBadge) warnBadge.classList.remove('d-none');
+                        else if (warnBadge) warnBadge.classList.add('d-none');
+                    }
                 }
             },
             save: async () => {
