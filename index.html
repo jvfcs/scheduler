@@ -91,9 +91,14 @@
 
     <div id="loginOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--app-bg); z-index: 1060; display: flex; align-items: center; justify-content: center;">
       <div class="card p-4 shadow-sm text-center" style="max-width: 400px; width: 90%; background: var(--card-bg); border: 1px solid var(--border-color);">
-        <img id="loginLogo" src="" alt="" style="width:200px; height:200px; object-fit:contain; margin: 0 auto; display: none;" class="mb-3">
-        <h3 id="loginTitle" class="fw-bold mb-3" style="color: var(--brand-pop-blue);">Login</h3>  
-        <div id="googleSignInButton" class="d-flex justify-content-center"></div>
+        <img id="loginLogo" src="https://placehold.co/300x300?text=Logo" alt="App Logo" style="width:300px; height:300px; object-fit:contain; margin: 0 auto; display: block;" class="mb-3">
+        
+        <h3 id="loginTitle" class="fw-bold mb-3" style="color: var(--brand-pop-blue);">Log in to Scheduler</h3>  
+        
+        <div id="googleSignInButton" class="d-flex justify-content-center align-items-center" style="min-height: 40px;">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            <span class="text-muted small">Loading Secure Login...</span>
+        </div>
       </div>
     </div>
 
@@ -1337,16 +1342,17 @@ const Availability = {
             
             applyWhiteLabel: () => {
                 const t = STATE.data.template || {};
-                if (t.app_title) { 
-                    document.title = t.app_title; 
-                    document.getElementById('ui-app-title').innerText = t.app_title; 
-                    document.getElementById('loginTitle').innerText = `Log in to ${t.app_title}`;
-                }
                 
+                // Fallback to "Scheduler" if not provided in template
+                const finalTitle = t.app_title || 'Scheduler';
+                document.title = finalTitle; 
+                document.getElementById('ui-app-title').innerText = finalTitle; 
+                document.getElementById('loginTitle').innerText = `Log in to ${finalTitle}`;
+                
+                // Only replace the dummy logo if a real URL is provided
                 if (t.brand_logo_url) {
                     const lImg = document.getElementById('loginLogo');
                     lImg.src = t.brand_logo_url;
-                    lImg.style.display = 'block';
                     
                     const ldImg = document.getElementById('loadLogo');
                     ldImg.src = t.brand_logo_url;
