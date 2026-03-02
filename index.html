@@ -6,13 +6,18 @@
     <meta name="theme-color" content="#001f3f" id="meta-theme-color">
     <title>Enterprise Scheduler</title>
 
+    <script>
+        const CONFIG = {
+            GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec",
+        };
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <style id="white-label-styles"></style>
 
     <style>
-        /* Fallback CSS if Template fails */
+        /* Fallback CSS if Template fetch fails */
         :root {
             --brand-pop-blue: #007bff; --brand-dark-blue: #001f3f;
             --brand-grey: #6c757d; --brand-accent-red: #dc3545;
@@ -20,6 +25,7 @@
             --card-bg: #ffffff; --text-main: #212529; --border-color: #dee2e6;
         }
         [data-bs-theme="dark"] {
+            --brand-pop-blue: #0d6efd;
             --app-bg: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0;
             --border-color: #333333; --brand-dark-blue: #000c1a;
         }
@@ -160,10 +166,6 @@
     </div>
 
     <script>
-        const CONFIG = {
-            GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec",
-        };
-
         const STATE = {
             data: { shifts: [], staff: [], assignments: [], template: {} },
             capacityOverrides: {},
@@ -244,9 +246,8 @@
         };
 
         const Compliance = {
-            // Dynamic Compliance Values pulled from Template (with safe fallbacks)
             getRules: () => {
-                const t = STATE.data.template;
+                const t = STATE.data.template || {};
                 return {
                     turnoverHours: parseFloat(t.rule_turnover_hours) || 8,
                     overtimeHours: parseFloat(t.rule_overtime_hours) || 40,
@@ -272,12 +273,10 @@
 
                 let staffAssignments = STATE.data.assignments.filter(a => a.email === email && a.id !== editAssignId);
                 
-                // Prevent Double-Assignment in same NON-cover slot
                 if (!isCoverSlot && staffAssignments.some(a => a.shiftId === targetShiftId && a.date === targetDateStr && a.assignedSlot !== 'COVER')) {
                     return { valid: false, reason: "Already assigned to this shift block." };
                 }
 
-                // Build Chronological Timeline for this Staff Member
                 let allRanges = staffAssignments.map(a => {
                     let range = TimeUtils.getRange(a.date, a.customStart || "00:00", a.customEnd || "00:00");
                     range.isCover = (a.assignedSlot === 'COVER');
@@ -285,22 +284,18 @@
                 });
                 allRanges.push(targetRange);
 
-                // FILTER OUT COVERS BEFORE EVALUATING TURNAROUND
                 let normalRanges = allRanges.filter(r => !r.isCover);
                 normalRanges.sort((a, b) => a.start - b.start);
 
-                // Absolute Overlap and Turnover Checks on Normal Shifts ONLY
                 const turnoverReqMs = rules.turnoverHours * 60 * 60 * 1000;
                 for (let i = 0; i < normalRanges.length - 1; i++) {
                     const current = normalRanges[i];
                     const next = normalRanges[i+1];
 
-                    // Physical Overlap Check
                     if (next.start < current.end) {
                         return { valid: false, reason: "Violation: Time overlap detected with another standard assignment." };
                     }
 
-                    // Turnover Gap Check 
                     const gapMs = next.start - current.end;
                     const gapHours = gapMs / (1000 * 60 * 60);
                     
@@ -370,7 +365,6 @@
                         
                         const slots = (shift.slots && shift.slots.length > 0) ? shift.slots : [shift.time];
                         
-                        // 1. Render Normal Slots
                         slots.forEach((slotTime, index) => {
                             const [sStart, sEnd] = slotTime.split('-');
                             const slotDiv = document.createElement('div');
@@ -383,7 +377,7 @@
 
                             const slotAssignments = STATE.data.assignments.filter(a => {
                                 if (a.shiftId !== shift.id || a.date !== dateStr || a.loc !== locFilter) return false;
-                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0);
+                                return a.assignedSlot === slotTime || (!a.assignedSlot && index === 0 && a.assignedSlot !== 'COVER');
                             });
                             
                             slotAssignments.forEach(assignment => {
@@ -394,7 +388,6 @@
                             cell.appendChild(slotDiv);
                         });
 
-                        // 2. Render Dedicated Cover Zone
                         const coverDiv = document.createElement('div');
                         coverDiv.className = 'slot-zone cover-zone';
                         coverDiv.innerHTML = `<div class="slot-label cover-label">Cover Section</div>`;
@@ -413,7 +406,6 @@
                         });
                         cell.appendChild(coverDiv);
 
-                        // Cell Capacity Label
                         const cellAssignments = STATE.data.assignments.filter(a => a.shiftId === shift.id && a.date === dateStr && a.loc === locFilter && a.assignedSlot !== 'COVER');
                         const effectiveCap = Scheduler.getCapacity(shift.id, dateStr);
                         const capDiv = document.createElement('div');
@@ -530,7 +522,6 @@
                     }
                 }
 
-                // INTLLIGENT AUTO-TRIM FOR COVERS (Prevents 0-minute overlaps when chaining shifts)
                 if (isCoverDrop) {
                     let exist = STATE.data.assignments.filter(a => a.email === email && a.id !== assignId);
                     for (let a of exist) {
@@ -609,19 +600,14 @@
             toggleTheme: () => document.documentElement.setAttribute('data-bs-theme', document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'),
             
             applyWhiteLabel: () => {
-                const t = STATE.data.template;
-                if (!t || Object.keys(t).length === 0) return; // Fallback to CSS defaults
-
-                // Apply Metadata
+                const t = STATE.data.template || {};
                 if (t.app_title) { document.title = t.app_title; document.getElementById('ui-app-title').innerText = t.app_title; }
                 
-                // Construct Footer
                 const comp = t.company_name || 'System';
                 const dev = t.developer_name || 'Developer';
                 const year = t.copyright_year || new Date().getFullYear();
                 document.getElementById('ui-footer').innerHTML = `&copy; ${year} ${comp}. All rights reserved.<br><small>Engineered by ${dev}</small>`;
 
-                // Build dynamic CSS string
                 const styleStr = `
                     :root {
                         --brand-pop-blue: ${t.theme_light_brand_pop || '#007bff'};
@@ -632,6 +618,7 @@
                         --border-color: ${t.theme_light_border || '#dee2e6'};
                     }
                     [data-bs-theme="dark"] {
+                        --brand-pop-blue: ${t.theme_dark_brand_pop || '#0d6efd'};
                         --app-bg: ${t.theme_dark_app_bg || '#121212'};
                         --card-bg: ${t.theme_dark_card_bg || '#1e1e1e'};
                         --text-main: ${t.theme_dark_text_main || '#e0e0e0'};
@@ -645,32 +632,40 @@
             autoLoad: async () => {
                 const res = await API.call('SYNC_DATA');
                 if (res.success && res.data) {
-                    
-                    // Normalize Template Array into a standard Key:Value Object
-                    if (res.data.template) {
-                        let tObj = {};
-                        res.data.template.forEach(item => { if(item.key) tObj[item.key] = item.value; });
-                        STATE.data.template = tObj;
-                    }
+                    STATE.data = res.data; 
 
-                    if (res.data.staff) {
-                        res.data.staff.forEach(s => { 
-                            s.email = String(s.email).toLowerCase().trim(); 
-                            if (typeof s.locations === 'string') { try { s.locations = JSON.parse(s.locations); } catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
-                        });
+                    let tObj = {};
+                    if (Array.isArray(STATE.data.template)) {
+                        STATE.data.template.forEach(item => { if(item.key) tObj[item.key] = item.value; });
                     }
-                    if (res.data.shifts) {
-                        res.data.shifts.forEach(s => { 
-                            s.id = String(s.id); 
-                            if (typeof s.slots === 'string') { try { s.slots = JSON.parse(s.slots); } catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } }
+                    STATE.data.template = tObj;
+
+                    if (Array.isArray(STATE.data.staff)) {
+                        STATE.data.staff.forEach(s => { 
+                            s.email = s.email ? String(s.email).toLowerCase().trim() : ''; 
+                            if (s.locations && typeof s.locations === 'string') { 
+                                try { s.locations = JSON.parse(s.locations); } 
+                                catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
+                            } else if (!Array.isArray(s.locations)) { s.locations = []; }
                         });
-                    }
-                    if (res.data.assignments) { 
-                        res.data.assignments.forEach(a => { 
-                            a.email = String(a.email).toLowerCase().trim(); 
-                            a.shiftId = String(a.shiftId); 
+                    } else { STATE.data.staff = []; }
+
+                    if (Array.isArray(STATE.data.shifts)) {
+                        STATE.data.shifts.forEach(s => { 
+                            s.id = s.id ? String(s.id) : ''; 
+                            if (s.slots && typeof s.slots === 'string') { 
+                                try { s.slots = JSON.parse(s.slots); } 
+                                catch(e) { s.slots = s.slots.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
+                            } else if (!Array.isArray(s.slots)) { s.slots = []; }
+                        });
+                    } else { STATE.data.shifts = []; }
+
+                    if (Array.isArray(STATE.data.assignments)) { 
+                        STATE.data.assignments.forEach(a => { 
+                            a.email = a.email ? String(a.email).toLowerCase().trim() : ''; 
+                            a.shiftId = a.shiftId ? String(a.shiftId) : ''; 
                         }); 
-                    } else { res.data.assignments = []; }
+                    } else { STATE.data.assignments = []; }
                 }
                 
                 App.applyWhiteLabel();
