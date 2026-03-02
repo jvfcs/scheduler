@@ -83,13 +83,13 @@
 </head>
 <body>
 
-    <div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--brand-dark-blue); z-index: 1070; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; transition: opacity 0.4s ease-out;">
+    <div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--brand-dark-blue); z-index: 1070; display: none; flex-direction: column; justify-content: center; align-items: center; color: white; transition: opacity 0.4s ease-out;">
         <img id="loadLogo" src="" alt="" style="width:200px; height:200px; object-fit:contain; opacity: 0; transition: opacity 0.5s; display: none;" class="mb-3">
         <div class="spinner-border text-light mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
         <h3 class="text-white">Syncing Database...</h3>
     </div>
 
-    <div id="loginOverlay" class="d-none" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--app-bg); z-index: 1060; display: flex; align-items: center; justify-content: center;">
+    <div id="loginOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--app-bg); z-index: 1060; display: flex; align-items: center; justify-content: center;">
       <div class="card p-4 shadow-sm text-center" style="max-width: 400px; width: 90%; background: var(--card-bg); border: 1px solid var(--border-color);">
         <img id="loginLogo" src="" alt="" style="width:200px; height:200px; object-fit:contain; margin: 0 auto; display: none;" class="mb-3">
         <h3 id="loginTitle" class="fw-bold mb-3" style="color: var(--brand-pop-blue);">Login</h3>  
@@ -1464,7 +1464,7 @@ const Availability = {
             },
 
             autoLoad: async () => {
-                // Fetch ONLY the template for the login UI
+                // Fetch ONLY the template for the login UI (runs silently)
                 const res = await API.call('INIT_APP'); 
                 if (res.success && res.data) {
                     let tObj = {};
@@ -1474,14 +1474,7 @@ const Availability = {
                     STATE.data.template = tObj;
                 }
                 
-                App.applyWhiteLabel();
-                
-                // Hide loading screen, show login screen. Do NOT init calendar.
-                document.getElementById('loading-overlay').style.opacity = '0';
-                setTimeout(() => {
-                    document.getElementById('loading-overlay').style.display = 'none';
-                    document.getElementById('loginOverlay').classList.remove('d-none');
-                }, 400);
+                App.applyWhiteLabel(); // Injects the Google Button & Logo into the visible login screen
             }
         };
 
