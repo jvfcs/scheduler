@@ -93,7 +93,7 @@
             <span class="sync-indicator ms-2" id="sync-icon">● Syncing</span>
             <div class="ms-4 d-none d-md-flex gap-2">
                 <button class="btn btn-sm btn-outline-light" onclick="App.navigate('scheduler')">Scheduler</button>
-                <button class="btn btn-sm btn-outline-light" onclick="App.navigate('availability')">Availability</button>
+                <button class="btn btn-sm btn-outline-light" onclick="App.navigate('availability')">Staff Management</button>
             </div>
             <div class="d-flex align-items-center ms-auto">
                 <button class="btn btn-sm btn-outline-light me-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
@@ -126,7 +126,7 @@
 <div id="view-availability" class="view-container" style="display: none;">
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="m-0">Staff Availability & Leaves</h3>
+                <h3 class="m-0">Staff Management</h3>
                 <select class="form-select form-select-sm w-auto" id="avail-loc-filter" onchange="Availability.render()">
                     <option value="ALL">Everywhere / Global</option>
                 </select>
@@ -154,18 +154,37 @@
         <div class="modal-dialog">
             <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Availability</h5>
+                    <h5 class="modal-title fw-bold text-primary" id="staff-modal-title">Edit Staff Profile</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" id="avail-email">
+                    <input type="hidden" id="avail-email-hidden">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Name</label>
+                            <input type="text" id="staff-name" class="form-control">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Role</label>
+                            <input type="text" id="staff-role" class="form-control">
+                        </div>
+                    </div>
                     <div class="mb-3">
-                        <label class="form-label">Preferred Shifts <small class="text-muted">(Ctrl/Cmd+Click for multiple)</small></label>
+                        <label class="form-label">Email <small class="text-muted">(Primary ID)</small></label>
+                        <input type="email" id="staff-email" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
+                        <select id="staff-locations" class="form-select" multiple size="3"></select>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label">Preferred Shifts <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
                         <select id="avail-pref-shifts" class="form-select" multiple size="3"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Preferred Days Off <small class="text-muted">(Ctrl/Cmd+Click for multiple)</small></label>
-                        <select id="avail-pref-days" class="form-select" multiple size="4">
+                        <label class="form-label">Preferred Days Off <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
+                        <select id="avail-pref-days" class="form-select" multiple size="3">
                             <option value="Mon">Monday</option>
                             <option value="Tue">Tuesday</option>
                             <option value="Wed">Wednesday</option>
@@ -190,7 +209,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="Availability.save()">Save Preferences</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Availability.save()">Save Staff Profile</button>
                 </div>
             </div>
         </div>
@@ -467,9 +486,24 @@ const Availability = {
                 });
             },
             openModal: (email) => {
-                document.getElementById('avail-email').value = email;
+                document.getElementById('avail-email-hidden').value = email;
+                
+                const staff = STATE.data.staff.find(s => s.email === email) || { name: '', role: '', locations: [], email: '' };
                 const existing = STATE.data.availability.filter(a => a.email === email);
                 const base = existing.length > 0 ? existing[0] : { prefShifts: '', prefDays: '', leaveStart: '', leaveEnd: '' };
+                
+                document.getElementById('staff-modal-title').innerText = `Edit: ${staff.name}`;
+                document.getElementById('staff-name').value = staff.name;
+                document.getElementById('staff-role').value = staff.role || '';
+                document.getElementById('staff-email').value = staff.email;
+
+                const locSelect = document.getElementById('staff-locations');
+                locSelect.innerHTML = '';
+                STATE.data.locations.forEach(loc => {
+                    locSelect.innerHTML += `<option value="${loc.name}">${loc.name}</option>`;
+                });
+                const selectedLocs = staff.locations || [];
+                Array.from(locSelect.options).forEach(opt => { if (selectedLocs.includes(opt.value)) opt.selected = true; });
                 
                 const shiftSelect = document.getElementById('avail-pref-shifts');
                 shiftSelect.innerHTML = '';
@@ -488,22 +522,39 @@ const Availability = {
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('availabilityModal')).show();
             },
             save: async () => {
-                const email = document.getElementById('avail-email').value;
+                const origEmail = document.getElementById('avail-email-hidden').value;
+                const newEmail = document.getElementById('staff-email').value.toLowerCase().trim();
+                
                 const shiftSelect = document.getElementById('avail-pref-shifts');
                 const daySelect = document.getElementById('avail-pref-days');
+                const locSelect = document.getElementById('staff-locations');
                 
                 const prefShifts = Array.from(shiftSelect.selectedOptions).map(opt => opt.value).join(', ');
                 const prefDays = Array.from(daySelect.selectedOptions).map(opt => opt.value).join(', ');
+                const locations = Array.from(locSelect.selectedOptions).map(opt => opt.value);
 
-                STATE.data.availability = STATE.data.availability.filter(a => a.email !== email);
+                if (origEmail !== newEmail && origEmail !== '') {
+                    STATE.data.assignments.forEach(a => { if(a.email === origEmail) a.email = newEmail; });
+                }
+
+                let staffItem = STATE.data.staff.find(s => s.email === origEmail);
+                if (staffItem) {
+                    staffItem.email = newEmail;
+                    staffItem.name = document.getElementById('staff-name').value;
+                    staffItem.role = document.getElementById('staff-role').value;
+                    staffItem.locations = locations;
+                }
+
+                STATE.data.availability = STATE.data.availability.filter(a => a.email !== origEmail);
                 STATE.data.availability.push({
                     id: 'V_' + Date.now(),
-                    email: email,
+                    email: newEmail,
                     prefShifts: prefShifts,
                     prefDays: prefDays,
                     leaveStart: document.getElementById('avail-leave-start').value,
                     leaveEnd: document.getElementById('avail-leave-end').value
                 });
+
                 Availability.render();
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('availabilityModal')).hide();
                 
@@ -512,7 +563,21 @@ const Availability = {
                     leaveStart: a.leaveStart ? `'${a.leaveStart}` : '',
                     leaveEnd: a.leaveEnd ? `'${a.leaveEnd}` : ''
                 }));
+                
+                if (origEmail !== newEmail && origEmail !== '') {
+                    const safeAssignments = STATE.data.assignments.map(a => ({
+                        ...a,
+                        date: a.date ? `'${a.date}` : '',
+                        customStart: a.customStart ? `'${a.customStart}` : '',
+                        customEnd: a.customEnd ? `'${a.customEnd}` : '',
+                        assignedSlot: a.assignedSlot ? `'${a.assignedSlot}` : ''
+                    }));
+                    await API.call('SAVE_SCHEDULE', { assignments: safeAssignments });
+                }
+
+                await API.call('SAVE_STAFF', { staff: STATE.data.staff });
                 await API.call('SAVE_AVAILABILITY', { availability: safeAvail });
+                Scheduler.render();
             }
         };
         const UI = {
