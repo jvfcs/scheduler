@@ -506,13 +506,35 @@ const Availability = {
                 Array.from(locSelect.options).forEach(opt => { if (selectedLocs.includes(opt.value)) opt.selected = true; });
                 
                 const shiftSelect = document.getElementById('avail-pref-shifts');
-                shiftSelect.innerHTML = '';
-                STATE.data.shifts.forEach(shift => {
-                    shiftSelect.innerHTML += `<option value="${shift.name}">${shift.name}</option>`;
-                });
+                let initialPrefShifts = base.prefShifts ? base.prefShifts.split(', ') : [];
                 
-                const selectedShifts = base.prefShifts ? base.prefShifts.split(', ') : [];
-                Array.from(shiftSelect.options).forEach(opt => { if (selectedShifts.includes(opt.value)) opt.selected = true; });
+                // Dynamic Renderer: Updates shifts based on selected locations
+                const renderDynamicShifts = () => {
+                    const activeLocs = Array.from(locSelect.selectedOptions).map(opt => opt.value);
+                    
+                    const validShifts = STATE.data.shifts.filter(s => {
+                        // Include global shifts (no location set) OR shifts matching selected locations
+                        if (!s.locations || s.locations.length === 0) return true; 
+                        return s.locations.some(l => activeLocs.includes(l));
+                    });
+
+                    // Remember UI selections so clicking a new location doesn't erase shift choices
+                    const currentUISelections = Array.from(shiftSelect.selectedOptions).map(opt => opt.value);
+                    const toSelect = new Set([...initialPrefShifts, ...currentUISelections]);
+
+                    shiftSelect.innerHTML = '';
+                    validShifts.forEach(shift => {
+                        const isSelected = toSelect.has(shift.name) ? 'selected' : '';
+                        shiftSelect.innerHTML += `<option value="${shift.name}" ${isSelected}>${shift.name}</option>`;
+                    });
+                    
+                    // Clear initial array so future changes are purely UI-driven
+                    initialPrefShifts = [];
+                };
+
+                // Bind listener to Locations dropdown and run once on load
+                locSelect.onchange = renderDynamicShifts;
+                renderDynamicShifts();
                 
                 const selectedDays = base.prefDays ? base.prefDays.split(', ') : [];
                 Array.from(document.getElementById('avail-pref-days').options).forEach(opt => { opt.selected = selectedDays.includes(opt.value); });
