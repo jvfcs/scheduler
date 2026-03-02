@@ -125,15 +125,23 @@
     </div>
 <div id="view-availability" class="view-container" style="display: none;">
         <div class="container-fluid">
-            <h3 class="mb-3">Staff Availability & Leaves</h3>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3 class="m-0">Staff Availability & Leaves</h3>
+                <select class="form-select form-select-sm w-auto" id="avail-loc-filter" onchange="Availability.render()">
+                    <option value="ALL">Everywhere / Global</option>
+                </select>
+            </div>
             <div class="table-responsive bg-white rounded border">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
                             <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('locations')">Location ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('prefShifts')">Preferred Shifts ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('prefDays')">Preferred Days Off ⇕</th>
-                            <th style="cursor:pointer;" onclick="Availability.sort('leaveStart')">Leave/Vacation Range ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('leaveStart')">Leave Range ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('currentHrs')">Curr Wk Hrs ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('nextHrs')">Next Wk Hrs ⇕</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -316,6 +324,27 @@
                 let start = Math.max(range1.start, range2.start);
                 let end = Math.min(range1.end, range2.end);
                 return Math.max(0, end - start);
+            },
+            getActualWeekDates: (offsetWeeks = 0) => {
+                let d = new Date();
+                let day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
+                let start = new Date(d.setDate(diff + (offsetWeeks * 7)));
+                let week = [];
+                for(let i=0; i<7; i++) {
+                    let next = new Date(start);
+                    next.setDate(start.getDate() + i);
+                    week.push(Calendar.toFormat(next));
+                }
+                return week;
+            },
+            getHoursForDates: (email, datesArray) => {
+                const assignments = STATE.data.assignments.filter(a => a.email === email && datesArray.includes(a.date));
+                let totalMs = 0;
+                assignments.forEach(a => {
+                    const range = TimeUtils.getRange(a.date, a.customStart, a.customEnd);
+                    totalMs += (range.end - range.start);
+                });
+                return totalMs / (1000 * 60 * 60);
             }
         };
 
@@ -380,26 +409,51 @@ const Availability = {
                 else { Availability.sortCol = col; Availability.sortAsc = true; }
                 Availability.render();
             },
+            renderLocationDropdown: () => {
+                const select = document.getElementById('avail-loc-filter');
+                select.innerHTML = '<option value="ALL">Everywhere / Global</option>';
+                const activeLocs = STATE.data.locations.filter(l => String(l.status).toLowerCase() !== 'disabled');
+                activeLocs.forEach(loc => {
+                    select.innerHTML += `<option value="${loc.name}">${loc.name}</option>`;
+                });
+            },
             render: () => {
                 const tbody = document.getElementById('availability-tbody');
+                const locFilter = document.getElementById('avail-loc-filter').value;
                 tbody.innerHTML = '';
                 
-                let tableData = STATE.data.staff.map(staff => {
+                const currDates = TimeUtils.getActualWeekDates(0);
+                const nextDates = TimeUtils.getActualWeekDates(1);
+
+                let filteredStaff = STATE.data.staff;
+                if (locFilter !== 'ALL') {
+                    filteredStaff = filteredStaff.filter(s => s.locations && s.locations.includes(locFilter));
+                }
+
+                let tableData = filteredStaff.map(staff => {
                     const leaves = STATE.data.availability.filter(a => a.email === staff.email);
                     const base = leaves.length > 0 ? leaves[0] : null;
+                    const locs = staff.locations && staff.locations.length > 0 ? staff.locations : [];
+                    
                     return {
                         email: staff.email,
                         name: staff.name,
+                        locations: locs.join('\n'),
+                        locDisplay: locs.join('<br>'),
                         prefShifts: base && base.prefShifts ? base.prefShifts : 'Any',
                         prefDays: base && base.prefDays ? base.prefDays : 'Any',
                         leaveStart: base && base.leaveStart ? base.leaveStart : '',
-                        leaveStr: base && base.leaveStart && base.leaveEnd ? `${base.leaveStart} to ${base.leaveEnd}` : 'None'
+                        leaveStr: base && base.leaveStart && base.leaveEnd ? `${base.leaveStart} to ${base.leaveEnd}` : 'None',
+                        currentHrs: TimeUtils.getHoursForDates(staff.email, currDates),
+                        nextHrs: TimeUtils.getHoursForDates(staff.email, nextDates)
                     };
                 });
 
                 tableData.sort((a, b) => {
-                    let valA = a[Availability.sortCol] || '';
-                    let valB = b[Availability.sortCol] || '';
+                    let valA = a[Availability.sortCol];
+                    let valB = b[Availability.sortCol];
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
                     if (valA < valB) return Availability.sortAsc ? -1 : 1;
                     if (valA > valB) return Availability.sortAsc ? 1 : -1;
                     return 0;
@@ -407,7 +461,7 @@ const Availability = {
 
                 tableData.forEach(row => {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td><button class="btn btn-sm btn-outline-primary" onclick="Availability.openModal('${row.email}')">Edit</button></td>`;
+                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.locDisplay}</td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td>${row.currentHrs.toFixed(2)}</td><td>${row.nextHrs.toFixed(2)}</td><td><button class="btn btn-sm btn-outline-primary" onclick="Availability.openModal('${row.email}')">Edit</button></td>`;
                     tbody.appendChild(tr);
                 });
             },
@@ -873,6 +927,7 @@ if (Array.isArray(STATE.data.availability)) {
                 }
                 
                 UI.renderLocationDropdown();
+                Availability.renderLocationDropdown();
                 App.applyWhiteLabel();
                 document.getElementById('loading-overlay').style.opacity = '0';
                 setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
