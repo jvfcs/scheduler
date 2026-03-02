@@ -541,12 +541,15 @@ const Availability = {
                     const base = leaves.length > 0 ? leaves[0] : null;
                     const locs = staff.locations && staff.locations.length > 0 ? staff.locations : [];
                     
+                    const hasFuture = STATE.data.assignments.some(a => a.email === staff.email && staff.disabledEpoch && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > Number(staff.disabledEpoch));
+
                     return {
                         email: staff.email,
                         name: staff.name,
                         role: staff.role || 'Staff',
                         status: staff.status || 'Active',
                         statusLog: staff.statusLog || '',
+                        hasFuture: hasFuture,
                         locations: locs.join('\n'),
                         locDisplay: locs.join('<br>'),
                         prefShifts: base && base.prefShifts ? base.prefShifts : 'Any',
@@ -573,13 +576,19 @@ const Availability = {
                     tr.style.cursor = 'pointer';
                     if (row.status === 'Disabled') tr.classList.add('table-secondary', 'text-muted'); 
                     tr.onclick = () => Availability.openModal(row.email);
+                    
+                    let statusDisplay = row.status;
+                    if (row.status === 'Disabled' && row.hasFuture) {
+                        statusDisplay += `<br><span class="badge bg-danger mt-1 text-wrap" style="font-size:0.65rem;">⚠️ Future Shifts</span>`;
+                    }
+
                     tr.innerHTML = `
                         <td>
                             <span class="badge bg-secondary mb-1">${row.role}</span><br>
                             <strong>${row.name}</strong><br>
                             <small style="opacity: 0.7; font-size: 0.75rem;">${row.email}</small>
                         </td>
-                        <td>${row.status}</td>
+                        <td>${statusDisplay}</td>
                         <td>${row.locDisplay}</td>
                         <td>${row.prefShifts}</td>
                         <td>${row.prefDays}</td>
@@ -619,7 +628,7 @@ const Availability = {
                 Availability.handleStatusToggle(statusToggle);
                 document.getElementById('staff-status-log').innerText = staff.statusLog || 'New Record';
                 
-                const hasFuture = STATE.data.assignments.some(a => a.email === email && staff.disabledEpoch && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > staff.disabledEpoch);
+                const hasFuture = STATE.data.assignments.some(a => a.email === email && staff.disabledEpoch && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > Number(staff.disabledEpoch));
                 const warnBadge = document.getElementById('staff-future-shifts-warning');
                 if (staff.status === 'Disabled' && hasFuture) warnBadge.classList.remove('d-none');
                 else warnBadge.classList.add('d-none');
@@ -946,7 +955,7 @@ const Availability = {
                 
                 let staffNameDisplay = staff.name;
                 const shiftEpoch = TimeUtils.getEpoch(assignment.date, assignment.customStart || "00:00");
-                if (staff.status === 'Disabled' && staff.disabledEpoch && shiftEpoch > staff.disabledEpoch) {
+                if (staff.status === 'Disabled' && staff.disabledEpoch && shiftEpoch > Number(staff.disabledEpoch)) {
                     staffNameDisplay = `<s class="text-danger">${staff.name}</s> <span title="Disabled Staff">⚠️</span>`;
                 }
 
