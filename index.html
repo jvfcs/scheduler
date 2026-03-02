@@ -514,9 +514,13 @@ const Availability = {
                 document.getElementById('staff-modal-title').innerText = email ? `Edit: ${staff.name}` : 'Add New Staff';
                 document.getElementById('staff-name').value = staff.name;
                 document.getElementById('staff-role').value = staff.role || '';
-                document.getElementById('staff-email').value = staff.email;
+                
+                const emailInput = document.getElementById('staff-email');
+                emailInput.value = staff.email;
+                emailInput.disabled = (email !== ''); // Locks the field if editing an existing profile
+                
                 document.getElementById('staff-status').value = staff.status || 'Active';
-                document.getElementById('staff-status-log').innerText = staff.statusLog ? `Changed: ${staff.statusLog}` : 'New Record';
+                document.getElementById('staff-status-log').innerText = staff.statusLog || 'New Record';
 
                 const locSelect = document.getElementById('staff-locations');
                 locSelect.innerHTML = '';
@@ -560,8 +564,12 @@ const Availability = {
             save: async () => {
                 const origEmail = document.getElementById('avail-email-hidden').value;
                 const newEmail = document.getElementById('staff-email').value.toLowerCase().trim();
+                
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(newEmail)) return alert("Please enter a valid email address.");
+
                 const newStatus = document.getElementById('staff-status').value;
-                const nowLog = new Date().toLocaleString();
+                const nowLog = `${newStatus} on ${new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'})}`;
                 
                 const shiftSelect = document.getElementById('avail-pref-shifts');
                 const daySelect = document.getElementById('avail-pref-days');
