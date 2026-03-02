@@ -112,6 +112,8 @@
                     <button class="btn btn-sm btn-outline-primary ms-2" onclick="Calendar.goToday()">Today</button>
                 </div>
                 <div>
+                    <button class="btn btn-sm btn-outline-danger me-2" onclick="Scheduler.clearWeek()">Clear Week</button>
+                    <button class="btn btn-sm btn-outline-primary me-2" onclick="Duplicator.openModal()">Duplicate</button>
                     <select class="form-select form-select-sm d-inline-block w-auto me-2" id="loc-filter" onchange="Scheduler.render()"></select>
                     <button class="btn btn-sm btn-primary" onclick="UI.openAddShiftModal()">+ Add Custom Shift</button>
                 </div>
@@ -248,11 +250,54 @@
                             </label>
                         </div>
                         <div style="font-size: 0.65rem; margin-top: 2px;" class="text-muted" id="staff-status-log"></div>
+                        <span id="staff-future-shifts-warning" class="badge bg-danger mt-1 d-none text-wrap text-start">⚠️ Has Future Shifts</span>
                     </div>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary btn-sm" onclick="Availability.save()">Save Profile</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="duplicateSetupModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header"><h5 class="modal-title">Duplicate Schedule</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <label class="form-label">Select Target Start Date (Any Day)</label>
+                    <input type="date" id="dup-target-date" class="form-control mb-3">
+                    <label class="form-label">How many weeks to duplicate forward?</label>
+                    <input type="number" id="dup-weeks" class="form-control" value="1" min="1">
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-primary btn-sm w-100" onclick="Duplicator.analyze()">Analyze & Duplicate</button></div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="duplicateOverwriteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content border-warning" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header bg-warning text-dark"><h5 class="modal-title">⚠️ Data Exists</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">Existing assignments were found in the target weeks for this location. Proceeding will permanently overwrite them.</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="Duplicator.handleOverwriteCancel()">Cancel & View Target Week</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="Duplicator.checkViolations(true)">Proceed (Overwrite)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="duplicateViolationModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content border-danger" style="background: var(--card-bg); color: var(--text-main);">
+                <div class="modal-header bg-danger text-white"><h5 class="modal-title">⚠️ Compliance Violations Detected</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <p>The following issues will occur if this duplication proceeds:</p>
+                    <ul id="dup-violation-list" class="text-danger small" style="max-height: 200px; overflow-y: auto;"></ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel Copy</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="Duplicator.execute('skip')">Proceed Without Violations (Skip)</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="Duplicator.execute('force')">Force Copy (Flag Red)</button>
                 </div>
             </div>
         </div>
@@ -573,6 +618,11 @@ const Availability = {
                 statusToggle.checked = (staff.status || 'Active') === 'Active';
                 Availability.handleStatusToggle(statusToggle);
                 document.getElementById('staff-status-log').innerText = staff.statusLog || 'New Record';
+                
+                const hasFuture = STATE.data.assignments.some(a => a.email === email && staff.disabledEpoch && TimeUtils.getEpoch(a.date, a.customStart || "00:00") > staff.disabledEpoch);
+                const warnBadge = document.getElementById('staff-future-shifts-warning');
+                if (staff.status === 'Disabled' && hasFuture) warnBadge.classList.remove('d-none');
+                else warnBadge.classList.add('d-none');
 
                 const locSelect = document.getElementById('staff-locations');
                 locSelect.innerHTML = '';
@@ -664,6 +714,8 @@ const Availability = {
                     if (staffItem.status !== newStatus) {
                         staffItem.status = newStatus;
                         staffItem.statusLog = nowLog;
+                        if (newStatus === 'Disabled') staffItem.disabledEpoch = Date.now();
+                        else staffItem.disabledEpoch = '';
                     }
                     staffItem.email = newEmail;
                     staffItem.name = document.getElementById('staff-name').value;
@@ -676,7 +728,8 @@ const Availability = {
                         role: document.getElementById('staff-role').value,
                         locations: locations,
                         status: newStatus,
-                        statusLog: nowLog
+                        statusLog: nowLog,
+                        disabledEpoch: newStatus === 'Disabled' ? Date.now() : ''
                     });
                 }
 
@@ -891,10 +944,22 @@ const Availability = {
                 
                 let timeDisplay = `<div class="split-time">${assignment.customStart} - ${assignment.customEnd}</div>`;
                 
+                let staffNameDisplay = staff.name;
+                const shiftEpoch = TimeUtils.getEpoch(assignment.date, assignment.customStart || "00:00");
+                if (staff.status === 'Disabled' && staff.disabledEpoch && shiftEpoch > staff.disabledEpoch) {
+                    staffNameDisplay = `<s class="text-danger">${staff.name}</s> <span title="Disabled Staff">⚠️</span>`;
+                }
+
                 if (isCoverSlot) {
-                    pill.innerHTML = `<strong>${staff.name} <br><small style="font-weight:normal; font-size: 0.65rem;">(Cover)</small></strong>${timeDisplay}`;
+                    pill.innerHTML = `<strong>${staffNameDisplay} <br><small style="font-weight:normal; font-size: 0.65rem;">(Cover)</small></strong>${timeDisplay}`;
                 } else {
-                    pill.innerHTML = `<strong>${staff.name}</strong>${timeDisplay}`;
+                    pill.innerHTML = `<strong>${staffNameDisplay}</strong>${timeDisplay}`;
+                }
+
+                if (assignment.isFlagged === true || String(assignment.isFlagged).toLowerCase() === 'true') {
+                    pill.style.backgroundColor = '#dc3545';
+                    pill.style.color = '#fff';
+                    pill.style.border = '2px solid darkred';
                 }
 
                 pill.draggable = true;
@@ -1015,6 +1080,133 @@ const Availability = {
                     defaultCapacity: parseInt(cap), slots: [`${start}-${end}`] 
                 });
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('addShiftModal')).hide();
+                Scheduler.render();
+            },
+            clearWeek: () => {
+                if(!confirm("Clear all assignments for this specific week and location?")) return;
+                const locFilter = document.getElementById('loc-filter').value;
+                const weekDates = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
+                STATE.data.assignments = STATE.data.assignments.filter(a => !(a.loc === locFilter && weekDates.includes(a.date)));
+                Scheduler.render();
+            }
+        };
+
+        const Duplicator = {
+            state: { targetDates: [], conflicts: [], violations: [], newAssignments: [], allowOverwrite: false, targetMonday: null },
+            openModal: () => {
+                document.getElementById('dup-target-date').value = '';
+                document.getElementById('dup-weeks').value = '1';
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateSetupModal')).show();
+            },
+            analyze: () => {
+                const startDateStr = document.getElementById('dup-target-date').value;
+                const weeks = parseInt(document.getElementById('dup-weeks').value) || 1;
+                if (!startDateStr) return alert("Select a target start date.");
+
+                const locFilter = document.getElementById('loc-filter').value;
+                const sourceDates = Calendar.getWeekArray().map(d => Calendar.toFormat(d));
+                const sourceAssignments = STATE.data.assignments.filter(a => a.loc === locFilter && sourceDates.includes(a.date));
+
+                if (sourceAssignments.length === 0) return alert("No assignments exist in this view to duplicate.");
+
+                const sourceMonday = Calendar.getWeekArray()[0];
+                const targetStart = new Date(TimeUtils.getEpoch(startDateStr, "00:00"));
+                const targetMonday = new Date(targetStart);
+                const day = targetMonday.getDay();
+                const diff = targetMonday.getDate() - day + (day == 0 ? -6 : 1);
+                targetMonday.setDate(diff);
+
+                const dayOffset = Math.round((targetMonday - sourceMonday) / (1000 * 60 * 60 * 24));
+                
+                let allTargetDates = [];
+                let proposedAssignments = [];
+
+                for (let w = 0; w < weeks; w++) {
+                    const weekOffsetDays = dayOffset + (w * 7);
+                    sourceAssignments.forEach(a => {
+                        const oldDateEpoch = TimeUtils.getEpoch(a.date, "00:00");
+                        const newDate = new Date(oldDateEpoch + (weekOffsetDays * 24 * 60 * 60 * 1000));
+                        const newDateStr = Calendar.toFormat(newDate);
+                        allTargetDates.push(newDateStr);
+
+                        proposedAssignments.push({
+                            ...a,
+                            id: 'A_' + Date.now() + Math.random().toString(36).substr(2, 9),
+                            date: newDateStr,
+                            isFlagged: false
+                        });
+                    });
+                }
+
+                allTargetDates = [...new Set(allTargetDates)];
+                const conflicts = STATE.data.assignments.filter(a => a.loc === locFilter && allTargetDates.includes(a.date));
+
+                Duplicator.state = { newAssignments: proposedAssignments, targetDates: allTargetDates, conflicts: conflicts, targetMonday: targetMonday, violations: [], allowOverwrite: false };
+                bootstrap.Modal.getInstance(document.getElementById('duplicateSetupModal')).hide();
+
+                if (conflicts.length > 0) bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateOverwriteModal')).show();
+                else Duplicator.checkViolations(false);
+            },
+            handleOverwriteCancel: () => {
+                bootstrap.Modal.getInstance(document.getElementById('duplicateOverwriteModal')).hide();
+                STATE.currentWeekStart = Duplicator.state.targetMonday;
+                Scheduler.render();
+            },
+            checkViolations: (allowOverwrite) => {
+                const ovrModal = bootstrap.Modal.getInstance(document.getElementById('duplicateOverwriteModal'));
+                if (ovrModal) ovrModal.hide();
+
+                const locFilter = document.getElementById('loc-filter').value;
+                let simulatedState = STATE.data.assignments.filter(a => {
+                    if (allowOverwrite && a.loc === locFilter && Duplicator.state.targetDates.includes(a.date)) return false;
+                    return true;
+                });
+
+                let violations = [];
+                Duplicator.state.newAssignments.forEach(a => {
+                    const originalState = STATE.data.assignments;
+                    STATE.data.assignments = simulatedState;
+                    const check = Compliance.checkDrop(a.email, a.shiftId, a.date, a.id, a.customStart, a.customEnd, (a.assignedSlot === 'COVER'));
+                    STATE.data.assignments = originalState;
+
+                    if (!check.valid) {
+                        const staff = STATE.data.staff.find(s => s.email === a.email);
+                        violations.push({ assignment: a, reason: `<b>${a.date} ${staff ? staff.name : a.email}</b>: ${check.reason}` });
+                    }
+                    simulatedState.push(a); 
+                });
+
+                Duplicator.state.violations = violations;
+                Duplicator.state.allowOverwrite = allowOverwrite;
+
+                if (violations.length > 0) {
+                    const list = document.getElementById('dup-violation-list');
+                    list.innerHTML = violations.map(v => `<li class="mb-1">${v.reason}</li>`).join('');
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('duplicateViolationModal')).show();
+                } else {
+                    Duplicator.execute('proceed');
+                }
+            },
+            execute: (mode) => {
+                const vioModal = bootstrap.Modal.getInstance(document.getElementById('duplicateViolationModal'));
+                if (vioModal) vioModal.hide();
+
+                const locFilter = document.getElementById('loc-filter').value;
+                if (Duplicator.state.allowOverwrite) {
+                    STATE.data.assignments = STATE.data.assignments.filter(a => !(a.loc === locFilter && Duplicator.state.targetDates.includes(a.date)));
+                }
+
+                let toAdd = Duplicator.state.newAssignments;
+                if (mode === 'skip') {
+                    const violatedIds = Duplicator.state.violations.map(v => v.assignment.id);
+                    toAdd = toAdd.filter(a => !violatedIds.includes(a.id));
+                } else if (mode === 'force') {
+                    const violatedIds = Duplicator.state.violations.map(v => v.assignment.id);
+                    toAdd.forEach(a => { if (violatedIds.includes(a.id)) a.isFlagged = true; });
+                }
+
+                STATE.data.assignments.push(...toAdd);
+                API.saveSchedule(); // Automatically saves
                 Scheduler.render();
             }
         };
