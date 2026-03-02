@@ -177,37 +177,61 @@
                         <label class="form-label">Email <small class="text-muted">(Primary ID)</small></label>
                         <input type="email" id="staff-email" class="form-control">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
-                        <select id="staff-locations" class="form-select" multiple size="3"></select>
-                    </div>
-                    <hr>
-                    <div class="mb-3">
-                        <label class="form-label">Preferred Shifts <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
-                        <select id="avail-pref-shifts" class="form-select" multiple size="3"></select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Preferred Days Off <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
-                        <select id="avail-pref-days" class="form-select" multiple size="3">
-                            <option value="Mon">Monday</option>
-                            <option value="Tue">Tuesday</option>
-                            <option value="Wed">Wednesday</option>
-                            <option value="Thu">Thursday</option>
-                            <option value="Fri">Friday</option>
-                            <option value="Sat">Saturday</option>
-                            <option value="Sun">Sunday</option>
-                        </select>
-                    </div>
-                    <hr>
-                    <h6>Leave / Vacation</h6>
-                    <div class="row">
-                        <div class="col-6">
-                            <label class="form-label">Start Date</label>
-                            <input type="date" id="avail-leave-start" class="form-control">
+                    <div class="d-grid gap-2 mb-2">
+                        <button class="btn btn-light text-start border d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLocations">
+                            <span class="fw-bold">Assigned Locations</span> <small class="text-muted">▼</small>
+                        </button>
+                        <div class="collapse" id="collapseLocations">
+                            <div class="card card-body p-2">
+                                <small class="text-muted mb-1">(Ctrl/Cmd+Click to select multiple)</small>
+                                <select id="staff-locations" class="form-select" multiple size="3"></select>
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label">End Date</label>
-                            <input type="date" id="avail-leave-end" class="form-control">
+
+                        <button class="btn btn-light text-start border d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseShifts">
+                            <span class="fw-bold">Preferred Shifts</span> <small class="text-muted">▼</small>
+                        </button>
+                        <div class="collapse" id="collapseShifts">
+                            <div class="card card-body p-2">
+                                <small class="text-muted mb-1">(Ctrl/Cmd+Click to select multiple)</small>
+                                <select id="avail-pref-shifts" class="form-select" multiple size="3"></select>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-light text-start border d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDays">
+                            <span class="fw-bold">Preferred Days Off</span> <small class="text-muted">▼</small>
+                        </button>
+                        <div class="collapse" id="collapseDays">
+                            <div class="card card-body p-2">
+                                <small class="text-muted mb-1">(Ctrl/Cmd+Click to select multiple)</small>
+                                <select id="avail-pref-days" class="form-select" multiple size="4">
+                                    <option value="Mon">Monday</option>
+                                    <option value="Tue">Tuesday</option>
+                                    <option value="Wed">Wednesday</option>
+                                    <option value="Thu">Thursday</option>
+                                    <option value="Fri">Friday</option>
+                                    <option value="Sat">Saturday</option>
+                                    <option value="Sun">Sunday</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-light text-start border d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLeave">
+                            <span class="fw-bold">Leave / Vacation</span> <small class="text-muted">▼</small>
+                        </button>
+                        <div class="collapse" id="collapseLeave">
+                            <div class="card card-body p-2">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label class="form-label" style="font-size: 0.85rem;">Start Date</label>
+                                        <input type="date" id="avail-leave-start" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label" style="font-size: 0.85rem;">End Date</label>
+                                        <input type="date" id="avail-leave-end" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -217,9 +241,9 @@
                             #staff-status-toggle:checked { background-color: #198754 !important; border-color: #198754 !important; }
                             #staff-status-toggle:not(:checked) { background-color: #dc3545 !important; border-color: #dc3545 !important; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e") !important; }
                         </style>
-                        <div class="form-check form-switch fs-5 mb-0 pb-0">
-                            <input class="form-check-input shadow-none" type="checkbox" role="switch" id="staff-status-toggle" onchange="Availability.handleStatusToggle(this)">
-                            <label class="form-check-label fs-6 ms-1" for="staff-status-toggle" style="vertical-align: middle;">
+                        <div class="form-check form-switch fs-5 mb-0 pb-0 d-flex align-items-center">
+                            <input class="form-check-input shadow-none mt-0" type="checkbox" role="switch" id="staff-status-toggle" onchange="Availability.handleStatusToggle(this)">
+                            <label class="form-check-label ms-2 d-flex align-items-center" for="staff-status-toggle">
                                 <span id="staff-status-label" class="badge bg-success">Active</span>
                             </label>
                         </div>
