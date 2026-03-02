@@ -133,10 +133,10 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Staff Name</th>
-                            <th>Preferred Shifts</th>
-                            <th>Preferred Days Off</th>
-                            <th>Leave/Vacation Range</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('prefShifts')">Preferred Shifts ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('prefDays')">Preferred Days Off ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('leaveStart')">Leave/Vacation Range ⇕</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -156,12 +156,20 @@
                 <div class="modal-body">
                     <input type="hidden" id="avail-email">
                     <div class="mb-3">
-                        <label class="form-label">Preferred Shifts</label>
-                        <input type="text" id="avail-pref-shifts" class="form-control" placeholder="e.g. Morning, Swing">
+                        <label class="form-label">Preferred Shifts <small class="text-muted">(Ctrl/Cmd+Click for multiple)</small></label>
+                        <select id="avail-pref-shifts" class="form-select" multiple size="3"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Preferred Days Off</label>
-                        <input type="text" id="avail-pref-days" class="form-control" placeholder="e.g. Sat, Sun">
+                        <label class="form-label">Preferred Days Off <small class="text-muted">(Ctrl/Cmd+Click for multiple)</small></label>
+                        <select id="avail-pref-days" class="form-select" multiple size="4">
+                            <option value="Mon">Monday</option>
+                            <option value="Tue">Tuesday</option>
+                            <option value="Wed">Wednesday</option>
+                            <option value="Thu">Thursday</option>
+                            <option value="Fri">Friday</option>
+                            <option value="Sat">Saturday</option>
+                            <option value="Sun">Sunday</option>
+                        </select>
                     </div>
                     <hr>
                     <h6>Leave / Vacation</h6>
@@ -368,18 +376,41 @@
             }
         };
 const Availability = {
+            sortCol: 'name',
+            sortAsc: true,
+            sort: (col) => {
+                if (Availability.sortCol === col) Availability.sortAsc = !Availability.sortAsc;
+                else { Availability.sortCol = col; Availability.sortAsc = true; }
+                Availability.render();
+            },
             render: () => {
                 const tbody = document.getElementById('availability-tbody');
                 tbody.innerHTML = '';
-                STATE.data.staff.forEach(staff => {
+                
+                let tableData = STATE.data.staff.map(staff => {
                     const leaves = STATE.data.availability.filter(a => a.email === staff.email);
                     const base = leaves.length > 0 ? leaves[0] : null;
-                    const prefShifts = base && base.prefShifts ? base.prefShifts : 'Any';
-                    const prefDays = base && base.prefDays ? base.prefDays : 'Any';
-                    const leaveStr = base && base.leaveStart && base.leaveEnd ? `${base.leaveStart} to ${base.leaveEnd}` : 'None';
-                    
+                    return {
+                        email: staff.email,
+                        name: staff.name,
+                        prefShifts: base && base.prefShifts ? base.prefShifts : 'Any',
+                        prefDays: base && base.prefDays ? base.prefDays : 'Any',
+                        leaveStart: base && base.leaveStart ? base.leaveStart : '',
+                        leaveStr: base && base.leaveStart && base.leaveEnd ? `${base.leaveStart} to ${base.leaveEnd}` : 'None'
+                    };
+                });
+
+                tableData.sort((a, b) => {
+                    let valA = a[Availability.sortCol] || '';
+                    let valB = b[Availability.sortCol] || '';
+                    if (valA < valB) return Availability.sortAsc ? -1 : 1;
+                    if (valA > valB) return Availability.sortAsc ? 1 : -1;
+                    return 0;
+                });
+
+                tableData.forEach(row => {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td><strong>${staff.name}</strong></td><td>${prefShifts}</td><td>${prefDays}</td><td>${leaveStr}</td><td><button class="btn btn-sm btn-outline-primary" onclick="Availability.openModal('${staff.email}')">Edit</button></td>`;
+                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td><button class="btn btn-sm btn-outline-primary" onclick="Availability.openModal('${row.email}')">Edit</button></td>`;
                     tbody.appendChild(tr);
                 });
             },
@@ -387,20 +418,37 @@ const Availability = {
                 document.getElementById('avail-email').value = email;
                 const existing = STATE.data.availability.filter(a => a.email === email);
                 const base = existing.length > 0 ? existing[0] : { prefShifts: '', prefDays: '', leaveStart: '', leaveEnd: '' };
-                document.getElementById('avail-pref-shifts').value = base.prefShifts || '';
-                document.getElementById('avail-pref-days').value = base.prefDays || '';
+                
+                const shiftSelect = document.getElementById('avail-pref-shifts');
+                shiftSelect.innerHTML = '';
+                STATE.data.shifts.forEach(shift => {
+                    shiftSelect.innerHTML += `<option value="${shift.name}">${shift.name}</option>`;
+                });
+                
+                const selectedShifts = base.prefShifts ? base.prefShifts.split(', ') : [];
+                Array.from(shiftSelect.options).forEach(opt => { if (selectedShifts.includes(opt.value)) opt.selected = true; });
+                
+                const selectedDays = base.prefDays ? base.prefDays.split(', ') : [];
+                Array.from(document.getElementById('avail-pref-days').options).forEach(opt => { opt.selected = selectedDays.includes(opt.value); });
+                
                 document.getElementById('avail-leave-start').value = base.leaveStart || '';
                 document.getElementById('avail-leave-end').value = base.leaveEnd || '';
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('availabilityModal')).show();
             },
             save: async () => {
                 const email = document.getElementById('avail-email').value;
+                const shiftSelect = document.getElementById('avail-pref-shifts');
+                const daySelect = document.getElementById('avail-pref-days');
+                
+                const prefShifts = Array.from(shiftSelect.selectedOptions).map(opt => opt.value).join(', ');
+                const prefDays = Array.from(daySelect.selectedOptions).map(opt => opt.value).join(', ');
+
                 STATE.data.availability = STATE.data.availability.filter(a => a.email !== email);
                 STATE.data.availability.push({
                     id: 'V_' + Date.now(),
                     email: email,
-                    prefShifts: document.getElementById('avail-pref-shifts').value,
-                    prefDays: document.getElementById('avail-pref-days').value,
+                    prefShifts: prefShifts,
+                    prefDays: prefDays,
                     leaveStart: document.getElementById('avail-leave-start').value,
                     leaveEnd: document.getElementById('avail-leave-end').value
                 });
