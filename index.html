@@ -170,7 +170,7 @@
                         </div>
                         <div class="col-6">
                             <label class="form-label">Role</label>
-                            <input type="text" id="staff-role" class="form-control">
+                            <select id="staff-role" class="form-select" onchange="Availability.handleRoleChange(this)"></select>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -180,12 +180,18 @@
                     <div class="row mb-3">
                         <div class="col-6">
                             <label class="form-label">Status</label>
-                            <select id="staff-status" class="form-select">
-                                <option value="Active">Active</option>
-                                <option value="Disabled">Disabled</option>
-                            </select>
+                            <style>
+                                #staff-status-toggle:checked { background-color: #198754 !important; border-color: #198754 !important; }
+                                #staff-status-toggle:not(:checked) { background-color: #dc3545 !important; border-color: #dc3545 !important; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e") !important; }
+                            </style>
+                            <div class="form-check form-switch fs-4 mb-0 pb-0">
+                                <input class="form-check-input shadow-none" type="checkbox" role="switch" id="staff-status-toggle" onchange="Availability.handleStatusToggle(this)">
+                                <label class="form-check-label fs-6 ms-1" for="staff-status-toggle" style="vertical-align: middle;">
+                                    <span id="staff-status-label" class="badge bg-success">Active</span>
+                                </label>
+                            </div>
                         </div>
-                        <div class="col-6 d-flex align-items-end pb-1">
+                        <div class="col-6 d-flex align-items-end pb-2">
                             <small class="text-muted" id="staff-status-log"></small>
                         </div>
                     </div>
@@ -527,13 +533,24 @@ const Availability = {
                 
                 document.getElementById('staff-modal-title').innerText = email ? `Edit: ${staff.name}` : 'Add New Staff';
                 document.getElementById('staff-name').value = staff.name;
-                document.getElementById('staff-role').value = staff.role || '';
+                
+                // Dynamically build Global Roles dropdown
+                const roleSelect = document.getElementById('staff-role');
+                roleSelect.innerHTML = '';
+                const uniqueRoles = [...new Set(STATE.data.staff.map(s => s.role).filter(r => r))].sort();
+                uniqueRoles.forEach(r => { roleSelect.innerHTML += `<option value="${r}">${r}</option>`; });
+                roleSelect.innerHTML += `<option value="__ADD_NEW__" class="fw-bold text-primary">+ Add New Role</option>`;
+                roleSelect.value = staff.role || (uniqueRoles.length > 0 ? uniqueRoles[0] : '__ADD_NEW__');
+                if(!roleSelect.value) roleSelect.selectedIndex = 0;
                 
                 const emailInput = document.getElementById('staff-email');
                 emailInput.value = staff.email;
-                emailInput.disabled = (email !== ''); // Locks the field if editing an existing profile
+                emailInput.disabled = (email !== ''); 
                 
-                document.getElementById('staff-status').value = staff.status || 'Active';
+                // Initialize the Status Toggle Switch
+                const statusToggle = document.getElementById('staff-status-toggle');
+                statusToggle.checked = (staff.status || 'Active') === 'Active';
+                Availability.handleStatusToggle(statusToggle);
                 document.getElementById('staff-status-log').innerText = staff.statusLog || 'New Record';
 
                 const locSelect = document.getElementById('staff-locations');
@@ -575,6 +592,30 @@ const Availability = {
                 document.getElementById('avail-leave-end').value = base.leaveEnd || '';
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('availabilityModal')).show();
             },
+            handleRoleChange: (selectEl) => {
+                if (selectEl.value === '__ADD_NEW__') {
+                    const newRole = prompt("Enter new role name:");
+                    if (newRole && newRole.trim() !== '') {
+                        const opt = document.createElement('option');
+                        opt.value = newRole.trim();
+                        opt.innerText = newRole.trim();
+                        selectEl.insertBefore(opt, selectEl.lastElementChild);
+                        selectEl.value = newRole.trim();
+                    } else {
+                        selectEl.selectedIndex = 0; // Cancel fallback
+                    }
+                }
+            },
+            handleStatusToggle: (toggleEl) => {
+                const label = document.getElementById('staff-status-label');
+                if (toggleEl.checked) {
+                    label.innerText = 'Active';
+                    label.className = 'badge bg-success';
+                } else {
+                    label.innerText = 'Disabled';
+                    label.className = 'badge bg-danger';
+                }
+            },
             save: async () => {
                 const origEmail = document.getElementById('avail-email-hidden').value;
                 const newEmail = document.getElementById('staff-email').value.toLowerCase().trim();
@@ -582,7 +623,7 @@ const Availability = {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(newEmail)) return alert("Please enter a valid email address.");
 
-                const newStatus = document.getElementById('staff-status').value;
+                const newStatus = document.getElementById('staff-status-toggle').checked ? 'Active' : 'Disabled';
                 const nowLog = `${newStatus} on ${new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'})}`;
                 
                 const shiftSelect = document.getElementById('avail-pref-shifts');
