@@ -142,7 +142,6 @@
                             <th style="cursor:pointer;" onclick="Availability.sort('leaveStart')">Leave Range ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('currentHrs')">Curr Wk Hrs ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('nextHrs')">Next Wk Hrs ⇕</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="availability-tbody"></tbody>
@@ -461,7 +460,9 @@ const Availability = {
 
                 tableData.forEach(row => {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.locDisplay}</td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td>${row.currentHrs.toFixed(2)}</td><td>${row.nextHrs.toFixed(2)}</td><td><button class="btn btn-sm btn-outline-primary" onclick="Availability.openModal('${row.email}')">Edit</button></td>`;
+                    tr.style.cursor = 'pointer';
+                    tr.onclick = () => Availability.openModal(row.email);
+                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.locDisplay}</td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td>${row.currentHrs.toFixed(2)}</td><td>${row.nextHrs.toFixed(2)}</td>`;
                     tbody.appendChild(tr);
                 });
             },
