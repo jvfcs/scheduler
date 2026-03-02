@@ -127,15 +127,19 @@
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3 class="m-0">Staff Management</h3>
-                <select class="form-select form-select-sm w-auto" id="avail-loc-filter" onchange="Availability.render()">
-                    <option value="ALL">Everywhere / Global</option>
-                </select>
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm w-auto" id="avail-loc-filter" onchange="Availability.render()">
+                        <option value="ALL">Everywhere / Global</option>
+                    </select>
+                    <button class="btn btn-sm btn-primary" onclick="Availability.openModal('')">+ Add Staff</button>
+                </div>
             </div>
             <div class="table-responsive bg-white rounded border">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
                             <th style="cursor:pointer;" onclick="Availability.sort('name')">Staff Name ⇕</th>
+                            <th style="cursor:pointer;" onclick="Availability.sort('status')">Status ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('locations')">Location ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('prefShifts')">Preferred Shifts ⇕</th>
                             <th style="cursor:pointer;" onclick="Availability.sort('prefDays')">Preferred Days Off ⇕</th>
@@ -172,6 +176,18 @@
                     <div class="mb-3">
                         <label class="form-label">Email <small class="text-muted">(Primary ID)</small></label>
                         <input type="email" id="staff-email" class="form-control">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Status</label>
+                            <select id="staff-status" class="form-select">
+                                <option value="Active">Active</option>
+                                <option value="Disabled">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="col-6 d-flex align-items-end pb-1">
+                            <small class="text-muted" id="staff-status-log"></small>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
@@ -456,6 +472,8 @@ const Availability = {
                     return {
                         email: staff.email,
                         name: staff.name,
+                        status: staff.status || 'Active',
+                        statusLog: staff.statusLog || '',
                         locations: locs.join('\n'),
                         locDisplay: locs.join('<br>'),
                         prefShifts: base && base.prefShifts ? base.prefShifts : 'Any',
@@ -480,22 +498,25 @@ const Availability = {
                 tableData.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.style.cursor = 'pointer';
+                    if (row.status === 'Disabled') tr.classList.add('table-secondary', 'text-muted'); // Greys out disabled staff visually
                     tr.onclick = () => Availability.openModal(row.email);
-                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.locDisplay}</td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td>${row.currentHrs.toFixed(2)}</td><td>${row.nextHrs.toFixed(2)}</td>`;
+                    tr.innerHTML = `<td><strong>${row.name}</strong></td><td>${row.status}</td><td>${row.locDisplay}</td><td>${row.prefShifts}</td><td>${row.prefDays}</td><td>${row.leaveStr}</td><td>${row.currentHrs.toFixed(2)}</td><td>${row.nextHrs.toFixed(2)}</td>`;
                     tbody.appendChild(tr);
                 });
             },
             openModal: (email) => {
                 document.getElementById('avail-email-hidden').value = email;
                 
-                const staff = STATE.data.staff.find(s => s.email === email) || { name: '', role: '', locations: [], email: '' };
+                const staff = STATE.data.staff.find(s => s.email === email) || { name: '', role: '', locations: [], email: '', status: 'Active', statusLog: '' };
                 const existing = STATE.data.availability.filter(a => a.email === email);
                 const base = existing.length > 0 ? existing[0] : { prefShifts: '', prefDays: '', leaveStart: '', leaveEnd: '' };
                 
-                document.getElementById('staff-modal-title').innerText = `Edit: ${staff.name}`;
+                document.getElementById('staff-modal-title').innerText = email ? `Edit: ${staff.name}` : 'Add New Staff';
                 document.getElementById('staff-name').value = staff.name;
                 document.getElementById('staff-role').value = staff.role || '';
                 document.getElementById('staff-email').value = staff.email;
+                document.getElementById('staff-status').value = staff.status || 'Active';
+                document.getElementById('staff-status-log').innerText = staff.statusLog ? `Changed: ${staff.statusLog}` : 'New Record';
 
                 const locSelect = document.getElementById('staff-locations');
                 locSelect.innerHTML = '';
@@ -508,17 +529,13 @@ const Availability = {
                 const shiftSelect = document.getElementById('avail-pref-shifts');
                 let initialPrefShifts = base.prefShifts ? base.prefShifts.split(', ') : [];
                 
-                // Dynamic Renderer: Updates shifts based on selected locations
                 const renderDynamicShifts = () => {
                     const activeLocs = Array.from(locSelect.selectedOptions).map(opt => opt.value);
-                    
                     const validShifts = STATE.data.shifts.filter(s => {
-                        // Include global shifts (no location set) OR shifts matching selected locations
                         if (!s.locations || s.locations.length === 0) return true; 
                         return s.locations.some(l => activeLocs.includes(l));
                     });
 
-                    // Remember UI selections so clicking a new location doesn't erase shift choices
                     const currentUISelections = Array.from(shiftSelect.selectedOptions).map(opt => opt.value);
                     const toSelect = new Set([...initialPrefShifts, ...currentUISelections]);
 
@@ -527,12 +544,9 @@ const Availability = {
                         const isSelected = toSelect.has(shift.name) ? 'selected' : '';
                         shiftSelect.innerHTML += `<option value="${shift.name}" ${isSelected}>${shift.name}</option>`;
                     });
-                    
-                    // Clear initial array so future changes are purely UI-driven
                     initialPrefShifts = [];
                 };
 
-                // Bind listener to Locations dropdown and run once on load
                 locSelect.onchange = renderDynamicShifts;
                 renderDynamicShifts();
                 
@@ -546,6 +560,8 @@ const Availability = {
             save: async () => {
                 const origEmail = document.getElementById('avail-email-hidden').value;
                 const newEmail = document.getElementById('staff-email').value.toLowerCase().trim();
+                const newStatus = document.getElementById('staff-status').value;
+                const nowLog = new Date().toLocaleString();
                 
                 const shiftSelect = document.getElementById('avail-pref-shifts');
                 const daySelect = document.getElementById('avail-pref-days');
@@ -561,13 +577,26 @@ const Availability = {
 
                 let staffItem = STATE.data.staff.find(s => s.email === origEmail);
                 if (staffItem) {
+                    if (staffItem.status !== newStatus) {
+                        staffItem.status = newStatus;
+                        staffItem.statusLog = nowLog;
+                    }
                     staffItem.email = newEmail;
                     staffItem.name = document.getElementById('staff-name').value;
                     staffItem.role = document.getElementById('staff-role').value;
                     staffItem.locations = locations;
+                } else {
+                    STATE.data.staff.push({
+                        email: newEmail,
+                        name: document.getElementById('staff-name').value,
+                        role: document.getElementById('staff-role').value,
+                        locations: locations,
+                        status: newStatus,
+                        statusLog: nowLog
+                    });
                 }
 
-                STATE.data.availability = STATE.data.availability.filter(a => a.email !== origEmail);
+                STATE.data.availability = STATE.data.availability.filter(a => a.email !== origEmail && a.email !== newEmail);
                 STATE.data.availability.push({
                     id: 'V_' + Date.now(),
                     email: newEmail,
@@ -727,6 +756,7 @@ const Availability = {
                 const rules = Compliance.getRules();
 
                 STATE.data.staff.forEach(staff => {
+                    if (staff.status === 'Disabled') return; // Hide disabled staff from the scheduling pool
                     if (staff.locations.includes(locFilter)) {
                         const pill = document.createElement('div');
                         pill.className = 'staff-pill pool-item';
