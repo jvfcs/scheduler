@@ -118,10 +118,11 @@
 
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#" id="ui-app-title" onclick="App.navigate('scheduler')" style="cursor: pointer;" title="Home">AppBase</a> 
+            <a class="navbar-brand" href="#" id="ui-app-title">AppBase</a> 
             <div class="d-flex align-items-center ms-auto gap-2">
-                <button class="btn btn-sm btn-outline-light" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
+                <button class="btn btn-sm btn-outline-light" onclick="App.navigate('scheduler')">Scheduler</button>
                 <button class="btn btn-sm btn-outline-light" onclick="App.navigate('management')">Admin Portal</button>
+                <button class="btn btn-sm btn-outline-light ms-3" onclick="API.saveSchedule()" id="btn-save">Save Schedule</button>
                 <button class="btn btn-sm btn-outline-light" onclick="Auth.signOut()">Sign Out</button>
                 <button class="btn btn-sm btn-outline-light ms-2" onclick="App.toggleTheme()">🌓</button>
             </div>
@@ -152,7 +153,7 @@
             <div class="staff-pool-container" id="staff-pool" ondragover="Scheduler.allowDrop(event)" ondrop="Scheduler.handleDrop(event, null, null)"></div>
             <div id="scheduler-canvas" class="scheduler-grid"></div>
             
-            <footer class="mt-4 mb-2 text-center text-muted small app-footer"></footer>
+            <footer class="mt-4 mb-2 text-center text-muted small" id="ui-footer"></footer>
         </div>
     </div>
 <div id="view-management" class="view-container" style="display: none;">
@@ -240,7 +241,6 @@
                                         <th style="cursor:pointer;" onclick="Management.sortShift('time')">Time Block ⇕</th>
                                         <th style="cursor:pointer;" onclick="Management.sortShift('defaultCapacity')">Base Capacity ⇕</th>
                                         <th style="cursor:pointer;" onclick="Management.sortShift('locations')">Assigned Locations ⇕</th>
-                                        <th style="cursor:pointer;" onclick="Management.sortShift('sortOrder')">Sort Orders ⇕</th>
                                         <th style="cursor:pointer;" onclick="Management.sortShift('status')">Status ⇕</th>
                                     </tr>
                                 </thead>
@@ -331,7 +331,6 @@
 
                 </div>
             </div>
-            <footer class="mt-4 mb-2 text-center text-muted small app-footer"></footer>
         </div>
     </div>
 
@@ -521,11 +520,7 @@
                         </div>
 
                     <label class="form-label small fw-bold">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
-                    <select id="shift-locations" class="form-select mb-2" multiple size="4" onchange="Management.renderShiftSortUI()"></select>
-                    
-                    <label class="form-label small fw-bold mt-2">Location Sort Orders <small class="text-muted">(Lower number = appears first)</small></label>
-                    <div id="shift-sort-container" class="border p-2 rounded mb-2" style="background: var(--app-bg); border-color: var(--border-color) !important; max-height: 150px; overflow-y: auto;"></div>
-
+                    <select id="shift-locations" class="form-select mb-2" multiple size="4"></select>
                     <small class="text-danger mt-2 d-block" style="font-size: 0.75rem;"><i>Note: Renaming will automatically update all historical shifts and staff profiles.</i></small>
                 </div>
                 <div class="modal-footer d-flex justify-content-between align-items-center">
@@ -1161,14 +1156,7 @@ const Availability = {
                     canvas.appendChild(div);
                 });
 
-                let visibleShifts = STATE.data.shifts.filter(s => !s.locations || s.locations.length === 0 || s.locations.includes(locFilter));
-                
-                visibleShifts.sort((a, b) => {
-                    let orderA = (a.sortOrder && a.sortOrder[locFilter]) !== undefined ? a.sortOrder[locFilter] : 999;
-                    let orderB = (b.sortOrder && b.sortOrder[locFilter]) !== undefined ? b.sortOrder[locFilter] : 999;
-                    return orderA - orderB;
-                });
-
+                const visibleShifts = STATE.data.shifts.filter(s => !s.locations || s.locations.length === 0 || s.locations.includes(locFilter));
                 visibleShifts.forEach(shift => {
                     const shiftCell = document.createElement('div');
                     shiftCell.className = 'shift-label';
@@ -1568,33 +1556,6 @@ const Availability = {
             locSortCol: 'name', locSortAsc: true,
             shiftSortCol: 'name', shiftSortAsc: true,
             currentShiftSlots: [], // Holds temporary slot arrays during modal edit
-            currentShiftSort: {}, // Holds sort orders per location
-
-            renderShiftSortUI: () => {
-                const container = document.getElementById('shift-sort-container');
-                const locSelect = document.getElementById('shift-locations');
-                const selectedLocs = Array.from(locSelect.selectedOptions).map(opt => opt.value);
-                
-                document.querySelectorAll('.dyn-shift-sort').forEach(input => {
-                    Management.currentShiftSort[input.dataset.loc] = parseInt(input.value) || 0;
-                });
-
-                container.innerHTML = '';
-                if (selectedLocs.length === 0) {
-                    container.innerHTML = '<small class="text-muted">Select locations above to assign sort orders.</small>';
-                    return;
-                }
-
-                selectedLocs.forEach(loc => {
-                    const val = Management.currentShiftSort[loc] || 0;
-                    container.innerHTML += `
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="small fw-bold">${loc}</span>
-                            <input type="number" class="form-control form-control-sm w-25 dyn-shift-sort" data-loc="${loc}" value="${val}" placeholder="1">
-                        </div>
-                    `;
-                });
-            },
 
             render: () => {
                 Management.renderLocations();
@@ -1702,8 +1663,7 @@ const Availability = {
                 
                 if (deepSaveRequired) {
                     await API.call('SAVE_STAFF', { staff: STATE.data.staff });
-                    const safeShifts = STATE.data.shifts.map(s => ({ ...s, sortOrder: typeof s.sortOrder === 'object' ? JSON.stringify(s.sortOrder) : s.sortOrder }));
-                    await API.call('SAVE_SHIFTS', { shifts: safeShifts });
+                    await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
                     const safePayload = STATE.data.assignments.map(a => ({ ...a, date: a.date ? `'${a.date}` : '', customStart: a.customStart ? `'${a.customStart}` : '', customEnd: a.customEnd ? `'${a.customEnd}` : '', assignedSlot: a.assignedSlot ? `'${a.assignedSlot}` : '' }));
                     await API.call('SAVE_SCHEDULE', { assignments: safePayload });
                 }
@@ -1750,7 +1710,6 @@ const Availability = {
                         <td>${shift.time}</td>
                         <td>${shift.defaultCapacity || 1}</td>
                         <td>${(shift.locations && shift.locations.length > 0) ? shift.locations.join(', ') : '<span style="color: var(--brand-grey);" class="fst-italic">Global (All)</span>'}</td>
-                        <td><small style="color: var(--brand-grey);">${shift.sortOrder ? Object.entries(shift.sortOrder).map(([k,v]) => `${k}: ${v}`).join('<br>') : 'None'}</small></td>
                         <td><span class="badge ${isActive ? 'bg-success' : 'bg-danger'}">${shift.status || 'Active'}</span></td>
                     </tr>`;
                 });
@@ -1813,7 +1772,6 @@ const Availability = {
                 document.getElementById('shift-cap').value = shift.defaultCapacity;
                 
                 Management.currentShiftSlots = (shift.slots && shift.slots.length > 0) ? [...shift.slots] : [shift.time || '09:00-17:00'];
-                Management.currentShiftSort = shift.sortOrder ? { ...shift.sortOrder } : {};
                 
                 const staggerToggle = document.getElementById('shift-stagger-toggle');
                 staggerToggle.checked = Management.currentShiftSlots.length > 1;
@@ -1825,8 +1783,6 @@ const Availability = {
                 STATE.data.locations.forEach(loc => { locSelect.innerHTML += `<option value="${loc.name}">${loc.name}</option>`; });
                 const selectedLocs = shift.locations || [];
                 Array.from(locSelect.options).forEach(opt => { if (selectedLocs.includes(opt.value)) opt.selected = true; });
-
-                Management.renderShiftSortUI();
 
                 const statusToggle = document.getElementById('shift-status-toggle');
                 statusToggle.checked = (shift.status || 'Active') === 'Active';
@@ -1840,11 +1796,6 @@ const Availability = {
                 const cap = parseInt(document.getElementById('shift-cap').value) || 1;
                 const locations = Array.from(document.getElementById('shift-locations').selectedOptions).map(opt => opt.value);
                 const newStatus = document.getElementById('shift-status-toggle').checked ? 'Active' : 'Disabled';
-                
-                let sortOrder = {};
-                document.querySelectorAll('.dyn-shift-sort').forEach(input => {
-                    sortOrder[input.dataset.loc] = parseInt(input.value) || 0;
-                });
                 
                 const startInputs = document.querySelectorAll('.dyn-shift-start');
                 const endInputs = document.querySelectorAll('.dyn-shift-end');
@@ -1870,12 +1821,12 @@ const Availability = {
                 let deepSaveRequired = false;
 
                 if (!id) {
-                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: slots, defaultCapacity: cap, locations: locations, sortOrder: sortOrder, status: newStatus });
+                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: slots, defaultCapacity: cap, locations: locations, status: newStatus });
                 } else {
                     const shift = STATE.data.shifts.find(s => s.id === id);
                     const origName = shift.name;
                     
-                    shift.name = name; shift.time = timeStr; shift.slots = slots; shift.defaultCapacity = cap; shift.locations = locations; shift.sortOrder = sortOrder; shift.status = newStatus;
+                    shift.name = name; shift.time = timeStr; shift.slots = slots; shift.defaultCapacity = cap; shift.locations = locations; shift.status = newStatus;
 
                     if (origName !== name) {
                         deepSaveRequired = true;
@@ -1898,8 +1849,7 @@ const Availability = {
                 document.getElementById('loading-text').innerText = "Saving Shift Template...";
                 document.getElementById('loading-overlay').style.display = 'flex'; document.getElementById('loading-overlay').style.opacity = '1';
 
-                const safeShifts = STATE.data.shifts.map(s => ({ ...s, sortOrder: typeof s.sortOrder === 'object' ? JSON.stringify(s.sortOrder) : s.sortOrder }));
-                await API.call('SAVE_SHIFTS', { shifts: safeShifts });
+                await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
                 
                 if (deepSaveRequired) {
                     const safeAvail = STATE.data.availability.map(a => ({ ...a, leaveStart: a.leaveStart ? `'${a.leaveStart}` : '', leaveEnd: a.leaveEnd ? `'${a.leaveEnd}` : '' }));
@@ -1999,8 +1949,7 @@ const Availability = {
                 const comp = t.company_name || 'System';
                 const dev = t.developer_name || 'Developer';
                 const year = t.copyright_year || new Date().getFullYear();
-                const footerHtml = `&copy; ${year} ${comp}. All rights reserved.<br><small>Engineered by ${dev}</small>`;
-                document.querySelectorAll('.app-footer').forEach(el => el.innerHTML = footerHtml);
+                document.getElementById('ui-footer').innerHTML = `&copy; ${year} ${comp}. All rights reserved.<br><small>Engineered by ${dev}</small>`;
 
                 const styleStr = `
                     :root {
@@ -2038,12 +1987,6 @@ const Availability = {
                             try { s.locations = JSON.parse(s.locations); } 
                             catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
                         } else if (!Array.isArray(s.locations)) { s.locations = []; }
-                        
-                        if (typeof s.sortOrder === 'string') {
-                            try { s.sortOrder = JSON.parse(s.sortOrder); } catch(e) { s.sortOrder = {}; }
-                        } else if (typeof s.sortOrder !== 'object' || s.sortOrder === null) {
-                            s.sortOrder = {};
-                        }
                     });
                 } else { STATE.data.staff = []; }
 
@@ -2059,12 +2002,6 @@ const Availability = {
                             try { s.locations = JSON.parse(s.locations); } 
                             catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
                         } else if (!Array.isArray(s.locations)) { s.locations = []; }
-                        
-                        if (typeof s.sortOrder === 'string') {
-                            try { s.sortOrder = JSON.parse(s.sortOrder); } catch(e) { s.sortOrder = {}; }
-                        } else if (typeof s.sortOrder !== 'object' || s.sortOrder === null) {
-                            s.sortOrder = {};
-                        }
                     });ocations && typeof s.locations === 'string') { 
                             try { s.locations = JSON.parse(s.locations); } 
                             catch(e) { s.locations = s.locations.replace(/[\[\]"]/g, '').split(',').map(l=>l.trim()); } 
