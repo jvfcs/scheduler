@@ -506,12 +506,19 @@
                     <input type="hidden" id="shift-id">
                     <div class="row mb-2">
                         <div class="col-8"><label class="form-label small fw-bold">Shift Name</label><input type="text" id="shift-name" class="form-control"></div>
-                        <div class="col-4"><label class="form-label small fw-bold">Capacity</label><input type="number" id="shift-cap" class="form-control" value="1"></div>
+                        <div class="col-4"><label class="form-label small fw-bold">Capacity</label><input type="number" id="shift-cap" class="form-control" value="1" min="1" oninput="Management.renderShiftSlotsUI()"></div>
                     </div>
-                    <div class="row mb-3">
-                        <div class="col-6"><label class="form-label small fw-bold">Start Time</label><input type="time" id="shift-start" class="form-control"></div>
-                        <div class="col-6"><label class="form-label small fw-bold">End Time</label><input type="time" id="shift-end" class="form-control"></div>
+                    
+                    <div class="mb-3 d-none" id="shift-stagger-toggle-container">
+                        <div class="form-check form-switch border p-2 rounded" style="border-color: var(--border-color) !important;">
+                            <input class="form-check-input ms-1 me-2 mt-1 shadow-none" type="checkbox" id="shift-stagger-toggle" onchange="Management.renderShiftSlotsUI()">
+                            <label class="form-check-label small fw-bold" for="shift-stagger-toggle">Stagger Times (Different schedule per slot)</label>
+                        </div>
                     </div>
+                    
+                    <div id="shift-slots-container" class="mb-2">
+                        </div>
+
                     <label class="form-label small fw-bold">Assigned Locations <small class="text-muted">(Ctrl/Cmd+Click)</small></label>
                     <select id="shift-locations" class="form-select mb-2" multiple size="4"></select>
                     <small class="text-danger mt-2 d-block" style="font-size: 0.75rem;"><i>Note: Renaming will automatically update all historical shifts and staff profiles.</i></small>
@@ -1548,6 +1555,7 @@ const Availability = {
         const Management = {
             locSortCol: 'name', locSortAsc: true,
             shiftSortCol: 'name', shiftSortAsc: true,
+            currentShiftSlots: [], // Holds temporary slot arrays during modal edit
 
             render: () => {
                 Management.renderLocations();
@@ -1723,16 +1731,52 @@ const Availability = {
                     }
                 }
             },
+            renderShiftSlotsUI: () => {
+                const cap = parseInt(document.getElementById('shift-cap').value) || 1;
+                const toggleContainer = document.getElementById('shift-stagger-toggle-container');
+                const staggerToggle = document.getElementById('shift-stagger-toggle');
+                const container = document.getElementById('shift-slots-container');
+                
+                if (cap > 1) { toggleContainer.classList.remove('d-none'); } 
+                else { toggleContainer.classList.add('d-none'); staggerToggle.checked = false; }
+
+                // Capture current inputs before re-rendering so typing isn't lost
+                const existingStarts = document.querySelectorAll('.dyn-shift-start');
+                const existingEnds = document.querySelectorAll('.dyn-shift-end');
+                if (existingStarts.length > 0) {
+                    Management.currentShiftSlots = Array.from(existingStarts).map((el, i) => `${el.value || ''}-${existingEnds[i].value || ''}`);
+                }
+
+                container.innerHTML = '';
+                const slotsToRender = (staggerToggle.checked && cap > 1) ? cap : 1;
+
+                for (let i = 0; i < slotsToRender; i++) {
+                    let slotTime = Management.currentShiftSlots[i] || Management.currentShiftSlots[0] || '-';
+                    let times = slotTime.split('-');
+                    let title = slotsToRender > 1 ? `Slot ${i + 1} Times` : `Shift Times`;
+                    
+                    container.innerHTML += `
+                        <div class="row mb-2">
+                            <div class="col-12 mb-1"><small class="fw-bold" style="color: var(--brand-pop-blue);">${title}</small></div>
+                            <div class="col-6"><label class="form-label small fw-bold">Start Time</label><input type="time" class="form-control dyn-shift-start" value="${times[0] || ''}"></div>
+                            <div class="col-6"><label class="form-label small fw-bold">End Time</label><input type="time" class="form-control dyn-shift-end" value="${times[1] || ''}"></div>
+                        </div>
+                    `;
+                }
+            },
             openShiftModal: (id = null) => {
-                const shift = STATE.data.shifts.find(s => s.id === id) || { id: '', name: '', time: '09:00-17:00', defaultCapacity: 1, locations: [], status: 'Active' };
+                const shift = STATE.data.shifts.find(s => s.id === id) || { id: '', name: '', time: '09:00-17:00', slots: ['09:00-17:00'], defaultCapacity: 1, locations: [], status: 'Active' };
                 document.getElementById('shift-modal-title').innerText = id ? 'Edit Shift Template' : 'Add Shift Template';
                 document.getElementById('shift-id').value = shift.id;
                 document.getElementById('shift-name').value = shift.name;
                 document.getElementById('shift-cap').value = shift.defaultCapacity;
                 
-                const times = shift.time.split('-');
-                document.getElementById('shift-start').value = times[0] || '';
-                document.getElementById('shift-end').value = times[1] || '';
+                Management.currentShiftSlots = (shift.slots && shift.slots.length > 0) ? [...shift.slots] : [shift.time || '09:00-17:00'];
+                
+                const staggerToggle = document.getElementById('shift-stagger-toggle');
+                staggerToggle.checked = Management.currentShiftSlots.length > 1;
+
+                Management.renderShiftSlotsUI();
 
                 const locSelect = document.getElementById('shift-locations');
                 locSelect.innerHTML = '';
@@ -1749,24 +1793,33 @@ const Availability = {
             saveShift: async () => {
                 const id = document.getElementById('shift-id').value;
                 const name = document.getElementById('shift-name').value.trim();
-                const start = document.getElementById('shift-start').value;
-                const end = document.getElementById('shift-end').value;
-                const cap = document.getElementById('shift-cap').value;
+                const cap = parseInt(document.getElementById('shift-cap').value) || 1;
                 const locations = Array.from(document.getElementById('shift-locations').selectedOptions).map(opt => opt.value);
                 const newStatus = document.getElementById('shift-status-toggle').checked ? 'Active' : 'Disabled';
                 
-                if (!name || !start || !end) return alert("Name and times are required.");
+                const startInputs = document.querySelectorAll('.dyn-shift-start');
+                const endInputs = document.querySelectorAll('.dyn-shift-end');
+                
+                let slots = [];
+                for (let i = 0; i < startInputs.length; i++) {
+                    let start = startInputs[i].value;
+                    let end = endInputs[i].value;
+                    if (!start || !end) return alert("All shift times are required.");
+                    slots.push(`${start}-${end}`);
+                }
 
-                const timeStr = `${start}-${end}`;
+                if (!name) return alert("Shift name is required.");
+
+                const timeStr = slots.length > 1 ? 'Staggered' : slots[0];
                 let deepSaveRequired = false;
 
                 if (!id) {
-                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: [timeStr], defaultCapacity: parseInt(cap), locations: locations, status: newStatus });
+                    STATE.data.shifts.push({ id: 'SH_' + Date.now(), name: name, time: timeStr, slots: slots, defaultCapacity: cap, locations: locations, status: newStatus });
                 } else {
                     const shift = STATE.data.shifts.find(s => s.id === id);
                     const origName = shift.name;
                     
-                    shift.name = name; shift.time = timeStr; shift.slots = [timeStr]; shift.defaultCapacity = parseInt(cap); shift.locations = locations; shift.status = newStatus;
+                    shift.name = name; shift.time = timeStr; shift.slots = slots; shift.defaultCapacity = cap; shift.locations = locations; shift.status = newStatus;
 
                     if (origName !== name) {
                         deepSaveRequired = true;
