@@ -1702,7 +1702,8 @@ const Availability = {
                 
                 if (deepSaveRequired) {
                     await API.call('SAVE_STAFF', { staff: STATE.data.staff });
-                    await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+                    const safeShifts = STATE.data.shifts.map(s => ({ ...s, sortOrder: typeof s.sortOrder === 'object' ? JSON.stringify(s.sortOrder) : s.sortOrder }));
+                    await API.call('SAVE_SHIFTS', { shifts: safeShifts });
                     const safePayload = STATE.data.assignments.map(a => ({ ...a, date: a.date ? `'${a.date}` : '', customStart: a.customStart ? `'${a.customStart}` : '', customEnd: a.customEnd ? `'${a.customEnd}` : '', assignedSlot: a.assignedSlot ? `'${a.assignedSlot}` : '' }));
                     await API.call('SAVE_SCHEDULE', { assignments: safePayload });
                 }
@@ -1897,7 +1898,8 @@ const Availability = {
                 document.getElementById('loading-text').innerText = "Saving Shift Template...";
                 document.getElementById('loading-overlay').style.display = 'flex'; document.getElementById('loading-overlay').style.opacity = '1';
 
-                await API.call('SAVE_SHIFTS', { shifts: STATE.data.shifts });
+                const safeShifts = STATE.data.shifts.map(s => ({ ...s, sortOrder: typeof s.sortOrder === 'object' ? JSON.stringify(s.sortOrder) : s.sortOrder }));
+                await API.call('SAVE_SHIFTS', { shifts: safeShifts });
                 
                 if (deepSaveRequired) {
                     const safeAvail = STATE.data.availability.map(a => ({ ...a, leaveStart: a.leaveStart ? `'${a.leaveStart}` : '', leaveEnd: a.leaveEnd ? `'${a.leaveEnd}` : '' }));
