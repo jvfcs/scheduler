@@ -1801,16 +1801,23 @@ const Availability = {
                 const endInputs = document.querySelectorAll('.dyn-shift-end');
                 
                 let slots = [];
+                let minStart = "23:59";
+                let maxEnd = "00:00";
+
                 for (let i = 0; i < startInputs.length; i++) {
                     let start = startInputs[i].value;
                     let end = endInputs[i].value;
                     if (!start || !end) return alert("All shift times are required.");
                     slots.push(`${start}-${end}`);
+                    
+                    // Calculate the earliest start and latest end across all slots
+                    if (start < minStart) minStart = start;
+                    if (end > maxEnd) maxEnd = end;
                 }
 
                 if (!name) return alert("Shift name is required.");
 
-                const timeStr = slots.length > 1 ? 'Staggered' : slots[0];
+                const timeStr = `${minStart}-${maxEnd}`;
                 let deepSaveRequired = false;
 
                 if (!id) {
