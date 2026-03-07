@@ -109,9 +109,11 @@
                 
                 if (t.brand_logo_url) {
                     const lImg = document.getElementById('loginLogo');
-                    lImg.src = t.brand_logo_url; lImg.style.opacity = '1';
+                    if(lImg) { lImg.src = t.brand_logo_url; lImg.style.opacity = '1'; }
                     const ldImg = document.getElementById('loadLogo');
-                    ldImg.src = t.brand_logo_url; ldImg.style.display = 'block'; ldImg.style.opacity = '1';
+                    if(ldImg) { ldImg.src = t.brand_logo_url; ldImg.style.display = 'block'; ldImg.style.opacity = '1'; }
+                    const navImg = document.getElementById('nav-brand-logo');
+                    if(navImg) { navImg.src = t.brand_logo_url; navImg.style.display = 'block'; }
                 }
 
                 const initGoogle = () => {
