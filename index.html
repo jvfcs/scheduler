@@ -170,8 +170,10 @@
                         document.getElementById('app-root').innerHTML = res.data.payloadHtml;
                         
                         // INJECT JS LOGIC ENGINE
+                        // We strip the <script> tags from the Apps Script HTML file so it evaluates as pure JS
+                        const rawJs = res.data.backendHtml.replace(/<script[^>]*>/gi, '').replace(/<\/script>/gi, '');
                         const scriptEl = document.createElement('script');
-                        scriptEl.innerHTML = res.data.backendHtml;
+                        scriptEl.text = rawJs;
                         document.body.appendChild(scriptEl);
 
                         // LAUNCH ENTERPRISE ENGINE
