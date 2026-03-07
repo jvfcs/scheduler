@@ -94,7 +94,7 @@
                     return json;
                 } catch (e) {
                     console.error("API Error:", e);
-                    return { success: false };
+                    return { success: false, error: "Network/Fetch Error: " + e.message };
                 }
             },
 
@@ -201,7 +201,12 @@
                     document.getElementById('loading-overlay').style.display = 'none';
                     document.getElementById('accessDenied').classList.remove('d-none');
                     document.getElementById('deniedEmail').innerText = ShellApp.currentUserEmail;
-                    document.getElementById('accessDeniedMsg').innerText = "Access Denied by Server or Payload failed to load.";
+                    
+                    // Reveal the ACTUAL server error if one exists
+                    let errorMsg = "Access Denied by Server or Payload failed to load.";
+                    if (res && res.error) errorMsg = `Server Error: ${res.error}`;
+                    
+                    document.getElementById('accessDeniedMsg').innerText = errorMsg;
                 }
             },
 
