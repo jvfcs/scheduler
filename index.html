@@ -181,7 +181,11 @@
                         // LAUNCH ENTERPRISE ENGINE
                         if (window.EnterpriseApp) {
                             window.EnterpriseApp.launch(res.data);
-                            ShellApp.applyWhiteLabel(window.STATE ? window.STATE.data.template : ShellApp.templateData);
+                            
+                            // The backend engine has now securely formatted the template data. 
+                            // Update the Shell's memory and apply the UI branding (including the logo).
+                            ShellApp.templateData = res.data.template;
+                            ShellApp.applyWhiteLabel(ShellApp.templateData);
                             
                             document.getElementById('loading-overlay').style.opacity = '0';
                             setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 400);
