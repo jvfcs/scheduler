@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#001f3f" id="meta-theme-color">
     <title>Enterprise Scheduler</title>
+    <link rel="icon" href="data:,">
 
     <script>
         const CONFIG = {
@@ -131,10 +132,6 @@
                 };
                 if (t.google_client_id) initGoogle();
                 else document.getElementById("googleSignInButton").innerHTML = `<div class="alert alert-danger p-2 small">Google Client ID missing from Template.</div>`;
-                
-                const comp = t.company_name || 'System'; const dev = t.developer_name || 'Developer'; const year = t.copyright_year || new Date().getFullYear();
-                const footerStr = `&copy; ${year} ${comp}. All rights reserved.<br><small>Engineered by ${dev}</small>`;
-                document.querySelectorAll('.app-footer').forEach(f => f.innerHTML = footerStr);
 
                 document.getElementById('white-label-styles').innerHTML = `
                     :root {
