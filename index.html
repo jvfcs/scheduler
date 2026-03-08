@@ -52,6 +52,7 @@
             <img id="loginLogo" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="App Logo" style="max-width:100%; max-height:100%; object-fit:contain; opacity: 0; transition: opacity 0.5s;">
         </div>
         <h3 id="loginTitle" class="fw-bold mb-3" style="color: var(--brand-pop-blue);">Log in to Scheduler</h3>  
+        <div id="loginMessageContainer" class="text-muted small mb-3 d-none" style="line-height: 1.4;"></div>
         <div id="googleSignInButton" class="d-flex justify-content-center align-items-center" style="min-height: 40px;">
             <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
             <span class="text-muted small">Loading Secure Login...</span>
@@ -109,6 +110,16 @@
                 if (titleEl) titleEl.innerText = finalTitle; 
                 document.getElementById('loginTitle').innerText = `Log in to ${finalTitle}`;
                 
+                const msgEl = document.getElementById('loginMessageContainer');
+                if (msgEl) {
+                    if (t.login_message && String(t.login_message).trim() !== '') {
+                        msgEl.innerText = t.login_message;
+                        msgEl.classList.remove('d-none');
+                    } else {
+                        msgEl.classList.add('d-none');
+                    }
+                }
+
                 if (t.brand_logo_url) {
                     const lImg = document.getElementById('loginLogo');
                     if(lImg) { lImg.src = t.brand_logo_url; lImg.style.opacity = '1'; }
