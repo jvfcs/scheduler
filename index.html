@@ -163,6 +163,14 @@
                 const res = await ShellApp.apiCall('SYNC_DATA');
 
                 if (res.success && res.data && res.data.payloadHtml && res.data.backendHtml) {
+                    
+                    // Dumb Shell Injection: Always load HTML for footer links, but hide banner if accepted
+                    if (res.data.gdprHtml) {
+                        document.getElementById('gdpr-container').innerHTML = res.data.gdprHtml;
+                        const banner = document.getElementById('gdprBanner');
+                        if (banner) banner.style.display = localStorage.getItem('gdpr_accepted') ? 'none' : 'block';
+                    }
+
                     const activeStaff = res.data.staff.find(s => String(s.email).toLowerCase() === ShellApp.currentUserEmail && String(s.status).toLowerCase() === 'active');
                     
                     if (activeStaff) {
@@ -234,9 +242,11 @@
                     }
                     ShellApp.templateData = tObj;
 
-                    // Dumb Shell Injection: Drop the GDPR HTML into the container if not accepted yet
-                    if (res.data.gdprHtml && !localStorage.getItem('gdpr_accepted')) {
+                    // Dumb Shell Injection: Always load HTML for footer links, but hide banner if accepted
+                    if (res.data.gdprHtml) {
                         document.getElementById('gdpr-container').innerHTML = res.data.gdprHtml;
+                        const banner = document.getElementById('gdprBanner');
+                        if (banner) banner.style.display = localStorage.getItem('gdpr_accepted') ? 'none' : 'block';
                     }
                 }
                 
