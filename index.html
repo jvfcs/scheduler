@@ -79,7 +79,9 @@
             
             apiCall: async (action, payload = {}) => {
                 if (!CONFIG.GAS_URL) return { success: false };
-                if (ShellApp.currentUserEmail) payload.authEmail = ShellApp.currentUserEmail;
+                
+                const token = localStorage.getItem('scheduler_token');
+                if (token) payload.authToken = token;
                 
                 try {
                     const syncIcon = document.getElementById('sync-icon');
@@ -94,6 +96,13 @@
                     const json = await res.json();
                     
                     if (syncIcon) syncIcon.classList.remove('syncing');
+
+                    // SECURE SESSION TIMEOUT: Auto-Logout if backend rejects token
+                    if (json && !json.success && json.error && json.error.includes("SESSION_EXPIRED")) {
+                        window.Auth.signOut(true);
+                        return { success: false, error: "Session expired." };
+                    }
+                    
                     return json;
                 } catch (e) {
                     console.error("API Error:", e);
@@ -235,9 +244,18 @@
             },
 
             init: async () => {
+                const savedToken = localStorage.getItem('scheduler_token');
                 const savedUserEmail = localStorage.getItem('scheduler_user');
                 
-                if (savedUserEmail) {
+                if (savedToken && savedUserEmail) {
+                    // Pre-flight check: Verify token expiration locally before bothering the server
+                    const data = window.Auth.parseJwt(savedToken);
+                    const nowInSeconds = Math.floor(Date.now() / 1000);
+                    if (data && data.exp && data.exp < nowInSeconds) {
+                        window.Auth.signOut(true);
+                        return;
+                    }
+
                     ShellApp.currentUserEmail = savedUserEmail;
                     ShellApp.secureBoot();
                     return;
@@ -286,11 +304,18 @@
                 
                 const email = data.email.toLowerCase().trim();
                 ShellApp.currentUserEmail = email;
+                
+                // Save the actual cryptographically signed JWT token for backend validation
+                localStorage.setItem('scheduler_token', response.credential);
                 localStorage.setItem('scheduler_user', email);
                 ShellApp.secureBoot();
             },
-            signOut: () => {
+            signOut: (isExpired = false) => {
                 localStorage.removeItem('scheduler_user');
+                localStorage.removeItem('scheduler_token');
+                if (isExpired === true) {
+                    alert("Your session has expired for your security. Please log in again.");
+                }
                 location.reload();
             }
         };
