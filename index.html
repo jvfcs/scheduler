@@ -10,22 +10,18 @@
   
   <script>
     // POINT THIS TO YOUR CLIENT CODE.GS DEPLOYMENT URL
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec";
-
-    // Bridge for the injected Scheduler frontend to communicate seamlessly
-    window.ShellApp = {
-        currentUserEmail: null,
-        apiCall: async (action, payload = {}) => {
-            return await apiCall(action, { payload: payload });
-        }
+    const CONFIG = {
+        GAS_URL: "https://script.google.com/macros/s/AKfycbxiO1y6rLA6lLLC0VZEgfdRpmy1kFrnLkC3377NvJY9twESS8dxD-fskDQWY6tXIX90/exec",
     };
   </script>
 
+  <style id="white-label-styles"></style>
+
   <style>
-    body { background-color: #f4f7f6; font-family: sans-serif; margin:0; padding:0; height: 100vh; width: 100%; overflow: hidden; }
+    body { background-color: #f8f9fa; font-family: sans-serif; margin:0; padding:0; padding-top: env(safe-area-inset-top); height: 100vh; width: 100%; overflow: hidden; }
     .hidden { display: none !important; }
-    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #001f3f; color: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.3s ease; }
-    #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f4f7f6; z-index: 10000; display: flex; align-items: center; justify-content: center; }
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #001f3f; color: white; z-index: 1070; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s ease-out; }
+    #loginOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #f8f9fa; z-index: 1060; display: flex; align-items: center; justify-content: center; }
   </style>
 </head>
 <body>
@@ -33,105 +29,215 @@
 <div id="loginOverlay" class="hidden">
   <div class="card p-4 shadow-sm text-center" style="max-width: 400px; width: 90%; background: #ffffff;">    
     <div id="loginContent">
-      <img id="loginLogo" src="" alt="" style="width:250px; height:250px; object-fit:contain; margin: 0 auto; opacity: 0; transition: opacity 0.5s;" class="mb-3">
+      <div style="height: 250px; width: 250px; margin: 0 auto;" class="mb-3 d-flex justify-content-center align-items-center">
+          <img id="loginLogo" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" style="max-width:100%; max-height:100%; object-fit:contain; opacity: 0; transition: opacity 0.5s;">
+      </div>
       <h3 id="loginTitle" class="fw-bold mb-3" style="color: #007bff;">Scheduler Login</h3> 
-      <div id="googleSignInBtn" class="d-flex justify-content-center"></div>
+      <div id="loginMessageContainer" class="text-muted small mb-3 hidden" style="line-height: 1.4;"></div>
+      <div id="googleSignInBtn" class="d-flex justify-content-center" style="min-height: 40px;">
+          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+      </div>
     </div>
   </div>
 </div>
 
 <div id="loadingOverlay">
-  <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
-  <h5 id="loading-text" class="fw-bold">Connecting to System...</h5>
+  <img id="loadLogo" src="" alt="" style="width:200px; height:200px; object-fit:contain; opacity: 0; transition: opacity 0.5s; display: none;" class="mb-3">
+  <div class="spinner-border text-light mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+  <h3 id="loading-text" class="text-white">Connecting to System...</h3>
 </div>
 
-<div id="accessDenied" class="container py-5 text-center hidden" style="position: absolute; z-index: 10001; background: white; width: 100vw; height: 100vh;">
+<div id="accessDenied" class="container py-5 text-center hidden" style="position: absolute; z-index: 1080; background: #f8f9fa; width: 100vw; height: 100vh;">
   <div class="card p-4 p-md-5 shadow-sm mx-auto mt-5 border-danger" style="max-width: 500px;">
     <h2 class="text-danger fw-bold mb-3">Access Denied</h2>
     <p class="text-muted" id="accessDeniedMsg">You do not have permission to view the Scheduler.</p>
     <p id="deniedEmail" class="fw-bold mt-3 mb-4 text-secondary"></p>
-    <button class="btn btn-outline-primary fw-bold w-100" onclick="signOut()">Sign In Again</button>
+    <button class="btn btn-outline-primary fw-bold w-100" onclick="window.Auth.signOut()">Return to Login</button>
   </div>
 </div>
 
-<div id="secureAppContainer"></div>
+<div id="gdpr-container"></div>
+<div id="app-root"></div>
 
 <script>
   let licenseKey = '';
 
-  document.addEventListener("DOMContentLoaded", function() {
-    apiCall('getTemplateConfig').then(tConfig => {
-        licenseKey = tConfig.license_key;
-        
-        if (tConfig.brand_logo_url) {
-            const lImg = document.getElementById('loginLogo');
-            lImg.src = tConfig.brand_logo_url; lImg.onload = () => lImg.style.opacity = '1';
-        }
-        if (tConfig.app_title) document.getElementById('loginTitle').innerText = tConfig.app_title + " Login";
+  const ShellApp = {
+      currentUserEmail: null,
+      templateData: {},
+      
+      apiCall: async (action, payload = {}) => {
+          if (!CONFIG.GAS_URL) return { success: false };
+          const token = localStorage.getItem('scheduler_token');
+          if (token) payload.authToken = token;
+          
+          try {
+              const syncIcon = document.getElementById('sync-icon');
+              if (syncIcon) syncIcon.classList.add('syncing');
+              
+              const res = await fetch(CONFIG.GAS_URL, { 
+                  method: 'POST', 
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  redirect: 'follow', 
+                  body: JSON.stringify({ action, payload }) 
+              });
+              const json = await res.json();
+              
+              if (syncIcon) syncIcon.classList.remove('syncing');
 
-        if (tConfig.google_client_id) {
-            window.google.accounts.id.initialize({ client_id: tConfig.google_client_id, callback: handleCredentialResponse });
-            window.google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: "outline", size: "large", type: "standard" });
-        }
-        
-        const savedEmail = localStorage.getItem('scheduler_user');
-        const savedToken = localStorage.getItem('scheduler_token');
-        if (savedEmail && savedToken) {
-            window.ShellApp.currentUserEmail = savedEmail;
-            bootApp();
-        } else {
-            document.getElementById('loadingOverlay').classList.add('hidden');
-            document.getElementById('loginOverlay').classList.remove('hidden');
-        }
-    }).catch(e => {
-        document.getElementById('loadingOverlay').classList.add('hidden');
-        document.getElementById('accessDenied').classList.remove('hidden');
-        document.getElementById('accessDeniedMsg').innerText = "System Configuration Error: " + e.message;
-    });
+              if (json && !json.success && json.error && json.error.includes("SESSION_EXPIRED")) {
+                  window.Auth.signOut(true);
+                  return { success: false, error: "Session expired." };
+              }
+              return json;
+          } catch (e) {
+              console.error("API Error:", e);
+              return { success: false, error: "Network/Fetch Error: " + e.message };
+          }
+      },
+      applyWhiteLabel: (t) => {
+          const finalTitle = t.app_title || 'Scheduler';
+          document.title = finalTitle; 
+          document.getElementById('loginTitle').innerText = `Log in to ${finalTitle}`;
+          
+          const msgEl = document.getElementById('loginMessageContainer');
+          if (msgEl) {
+              if (t.login_message && String(t.login_message).trim() !== '') {
+                  msgEl.innerText = t.login_message;
+                  msgEl.classList.remove('hidden');
+              }
+          }
+
+          if (t.brand_logo_url) {
+              const lImg = document.getElementById('loginLogo');
+              if(lImg) { lImg.src = t.brand_logo_url; lImg.onload = () => lImg.style.opacity = '1'; }
+              const ldImg = document.getElementById('loadLogo');
+              if(ldImg) { ldImg.src = t.brand_logo_url; ldImg.style.display = 'block'; ldImg.style.opacity = '1'; }
+          }
+
+          if (t.google_client_id) {
+              if (window.google && google.accounts && google.accounts.id) {
+                  document.getElementById("googleSignInBtn").innerHTML = ''; 
+                  google.accounts.id.initialize({
+                      client_id: t.google_client_id,
+                      callback: window.Auth.handleCredentialResponse
+                  });
+                  google.accounts.id.renderButton(
+                      document.getElementById("googleSignInBtn"),
+                      { theme: "outline", size: "large", type: "standard" }
+                  );
+              } else { setTimeout(() => ShellApp.applyWhiteLabel(t), 100); }
+          } else {
+              document.getElementById("googleSignInBtn").innerHTML = `<div class="alert alert-danger p-2 small">Google Client ID missing.</div>`;
+          }
+
+          document.getElementById('white-label-styles').innerHTML = `
+              :root {
+                  --brand-pop-blue: ${t.theme_light_brand_pop || '#007bff'};
+                  --brand-dark-blue: ${t.theme_light_brand_dark || '#001f3f'};
+                  --app-bg: ${t.theme_light_app_bg || '#f8f9fa'};
+                  --card-bg: ${t.theme_light_card_bg || '#ffffff'};
+                  --text-main: ${t.theme_light_text_main || '#212529'};
+                  --border-color: ${t.theme_light_border || '#dee2e6'};
+              }
+              [data-bs-theme="dark"] {
+                  --brand-pop-blue: ${t.theme_dark_brand_pop || '#0d6efd'};
+                  --app-bg: ${t.theme_dark_app_bg || '#121212'};
+                  --card-bg: ${t.theme_dark_card_bg || '#1e1e1e'};
+                  --text-main: ${t.theme_dark_text_main || '#e0e0e0'};
+                  --border-color: ${t.theme_dark_border || '#333333'};
+                  --brand-dark-blue: ${t.theme_dark_brand_dark || '#000c1a'};
+              }
+          `;
+      },
+      decryptPayloadBytes: (base64Str, key) => {
+          const binaryStr = atob(base64Str);
+          const keyBytes = new TextEncoder().encode(key);
+          const decryptedBytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+              decryptedBytes[i] = binaryStr.charCodeAt(i) ^ keyBytes[i % keyBytes.length];
+          }
+          return new TextDecoder().decode(decryptedBytes);
+      }
+  };
+
+  window.Auth = {
+      parseJwt: (token) => {
+          try {
+              const base64Url = token.split('.')[1];
+              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+              const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+              return JSON.parse(jsonPayload);
+          } catch(e) { return null; }
+      },
+      handleCredentialResponse: (response) => {
+          const data = window.Auth.parseJwt(response.credential);
+          if (!data || !data.email) return alert("Error reading Google Credentials.");
+          
+          const email = data.email.toLowerCase().trim();
+          ShellApp.currentUserEmail = email;
+          localStorage.setItem('scheduler_token', response.credential);
+          localStorage.setItem('scheduler_user', email);
+          secureBoot();
+      },
+      signOut: (isExpired = false) => {
+          localStorage.removeItem('scheduler_user');
+          localStorage.removeItem('scheduler_token');
+          if(isExpired) alert("Session expired. Please log in again.");
+          window.location.reload(); 
+      }
+  };
+
+  document.addEventListener("DOMContentLoaded", async function() {
+      document.getElementById('loading-text').innerText = "Initializing System Shell...";
+      const res = await ShellApp.apiCall('getTemplateConfig');
+      
+      if (res.success && res.data) {
+          ShellApp.templateData = res.data;
+          licenseKey = res.data.license_key;
+          ShellApp.applyWhiteLabel(res.data);
+      } else {
+          document.getElementById('loadingOverlay').classList.add('hidden');
+          document.getElementById('accessDenied').classList.remove('hidden');
+          document.getElementById('accessDeniedMsg').innerText = "System Configuration Error.";
+          return;
+      }
+
+      const savedToken = localStorage.getItem('scheduler_token');
+      const savedUserEmail = localStorage.getItem('scheduler_user');
+      
+      if (savedToken && savedUserEmail) {
+          const data = window.Auth.parseJwt(savedToken);
+          const nowInSeconds = Math.floor(Date.now() / 1000);
+          if (data && data.exp && data.exp < nowInSeconds) {
+              window.Auth.signOut(true);
+              return;
+          }
+          ShellApp.currentUserEmail = savedUserEmail;
+          secureBoot();
+      } else {
+          document.getElementById('loadingOverlay').classList.add('hidden');
+          document.getElementById('loginOverlay').classList.remove('hidden');
+      }
   });
 
-  async function apiCall(actionName, payloadData = {}) {
-    const token = localStorage.getItem('scheduler_token');
-    
-    const response = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: actionName, userToken: token, ...payloadData })
-    });
-    const result = await response.json();
-    
-    if (result.error) {
-        if (result.error.includes("SESSION_EXPIRED")) { signOut(true); return new Promise(() => {}); }
-        throw new Error(result.error);
-    }
-    return result.data || result;
-  }
-
-  function handleCredentialResponse(response) {
-    const jwt = response.credential;
-    const payload = JSON.parse(atob(jwt.split('.')[1]));
-    localStorage.setItem('scheduler_user', payload.email);
-    localStorage.setItem('scheduler_token', jwt);   
-    window.ShellApp.currentUserEmail = payload.email.toLowerCase().trim();
-    bootApp();
-  }
-
-  function signOut(isExpired = false) {
-    localStorage.removeItem('scheduler_user');
-    localStorage.removeItem('scheduler_token');
-    if(isExpired) alert("Session expired. Please log in again.");
-    window.location.reload(); 
-  }
-
-  async function bootApp() {
+  async function secureBoot() {
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('loadingOverlay').classList.remove('hidden');
-    document.getElementById('loading-text').innerText = "Loading Secure Application...";
+    document.getElementById('loading-text').innerText = "Loading Secure Environment...";
     
     try {
-      const res = await apiCall('getSecureApp');
-      const decryptedHtml = decryptPayloadBytes(res.data, licenseKey);
-      
+      // 1. Fetch Encrypted UI AND the DB Data simultaneously
+      const [payloadRes, dbRes] = await Promise.all([
+          ShellApp.apiCall('getSecureApp'),
+          ShellApp.apiCall('SYNC_DATA')
+      ]);
+
+      if (!payloadRes.success) throw new Error(payloadRes.error || "Failed to download core logic from Mothership.");
+      if (!dbRes.success) throw new Error(dbRes.error || "Access Denied: You are not an active staff member.");
+
+      // 2. Decrypt and Mount the UI
+      const decryptedHtml = ShellApp.decryptPayloadBytes(payloadRes.data, licenseKey);
       const temp = document.createElement('div');
       temp.innerHTML = decryptedHtml;
       
@@ -141,29 +247,37 @@
       const scripts = temp.querySelectorAll('script');
       scripts.forEach(s => s.remove());
       
-      document.getElementById('secureAppContainer').innerHTML = temp.innerHTML;
+      document.getElementById('app-root').innerHTML = temp.innerHTML;
       
+      // 3. Inject the Frontend JS Engine
       scripts.forEach((script) => {
         const newScript = document.createElement('script');
         newScript.text = script.text;
         document.body.appendChild(newScript);
       });
+
+      // 4. Launch the Enterprise App with the fetched Database State
+      if (window.EnterpriseApp) {
+          window.EnterpriseApp.launch(dbRes.data);
+          
+          if (dbRes.data.gdprHtml) {
+              document.getElementById('gdpr-container').innerHTML = dbRes.data.gdprHtml;
+              const banner = document.getElementById('gdprBanner');
+              if (banner) banner.style.display = localStorage.getItem('gdpr_accepted') ? 'none' : 'block';
+          }
+
+          document.getElementById('loadingOverlay').style.opacity = '0';
+          setTimeout(() => document.getElementById('loadingOverlay').classList.add('hidden'), 400);
+      } else {
+          throw new Error("Critical Error: Application core failed to mount.");
+      }
       
     } catch (err) {
       document.getElementById('loadingOverlay').classList.add('hidden');
       document.getElementById('accessDenied').classList.remove('hidden');
       document.getElementById('accessDeniedMsg').innerText = err.message;
+      document.getElementById('deniedEmail').innerText = ShellApp.currentUserEmail || '';
     }
-  }
-
-  function decryptPayloadBytes(base64Str, key) {
-      const binaryStr = atob(base64Str);
-      const keyBytes = new TextEncoder().encode(key);
-      const decryptedBytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-          decryptedBytes[i] = binaryStr.charCodeAt(i) ^ keyBytes[i % keyBytes.length];
-      }
-      return new TextDecoder().decode(decryptedBytes);
   }
 </script>
 </body>
