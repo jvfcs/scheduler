@@ -52,7 +52,7 @@
     <h2 class="text-danger fw-bold mb-3">Access Denied</h2>
     <p class="text-muted" id="accessDeniedMsg">You do not have permission to view the Scheduler.</p>
     <p id="deniedEmail" class="fw-bold mt-3 mb-4 text-secondary"></p>
-    <button class="btn btn-outline-primary fw-bold w-100" onclick="window.Auth.signOut()">Return to Login</button>
+    <button class="btn btn-outline-primary fw-bold w-100" onclick="window.Auth.signOut()">Sign In Again</button>
   </div>
 </div>
 
@@ -199,7 +199,7 @@
       } else {
           document.getElementById('loadingOverlay').classList.add('hidden');
           document.getElementById('accessDenied').classList.remove('hidden');
-          document.getElementById('accessDeniedMsg').innerText = "System Configuration Error.";
+          document.getElementById('accessDeniedMsg').innerText = "System Configuration Error: " + (res.error || "Unknown");
           return;
       }
 
