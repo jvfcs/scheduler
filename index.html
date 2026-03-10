@@ -113,6 +113,10 @@
           document.title = finalTitle; 
           document.getElementById('loginTitle').innerText = `Log in to ${finalTitle}`;
           
+          // CRITICAL FIX: Restored the missing code to update the Navbar text
+          const titleEl = document.getElementById('ui-app-title');
+          if (titleEl) titleEl.innerText = finalTitle; 
+
           const msgEl = document.getElementById('loginMessageContainer');
           if (msgEl) {
               if (t.login_message && String(t.login_message).trim() !== '') {
