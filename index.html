@@ -161,6 +161,9 @@
       }
   };
 
+  // CRITICAL FIX: Expose ShellApp globally so the injected payload can read the queue!
+  window.ShellApp = ShellApp;
+
   window.Auth = {
       parseJwt: (token) => {
           try {
