@@ -286,6 +286,9 @@
       if (window.EnterpriseApp) {
           window.EnterpriseApp.launch(dbRes.data);
           
+          // CRITICAL FIX: Re-run branding on the freshly injected Navbar
+          ShellApp.applyWhiteLabel(ShellApp.templateData);
+          
           document.getElementById('loadingOverlay').style.opacity = '0';
           setTimeout(() => document.getElementById('loadingOverlay').classList.add('hidden'), 400);
       } else {
