@@ -144,6 +144,11 @@
               document.getElementById("googleSignInBtn").innerHTML = `<div class="alert alert-danger p-2 small">Google Client ID missing.</div>`;
           }
 
+          if (t.legalSystemHtml) {
+              document.getElementById('gdpr-container').innerHTML = t.legalSystemHtml;
+              checkGDPR();
+          }
+
           document.getElementById('white-label-styles').innerHTML = `
               :root {
                   --brand-pop-blue: ${t.theme_light_brand_pop || '#007bff'};
@@ -281,12 +286,6 @@
       if (window.EnterpriseApp) {
           window.EnterpriseApp.launch(dbRes.data);
           
-          if (dbRes.data.gdprHtml) {
-              document.getElementById('gdpr-container').innerHTML = dbRes.data.gdprHtml;
-              const banner = document.getElementById('gdprBanner');
-              if (banner) banner.style.display = localStorage.getItem('gdpr_accepted') ? 'none' : 'block';
-          }
-
           document.getElementById('loadingOverlay').style.opacity = '0';
           setTimeout(() => document.getElementById('loadingOverlay').classList.add('hidden'), 400);
       } else {
@@ -299,6 +298,50 @@
       document.getElementById('accessDeniedMsg').innerText = err.message;
       document.getElementById('deniedEmail').innerText = ShellApp.currentUserEmail || '';
     }
+  }
+  function checkGDPR() {
+    if (!localStorage.getItem('gdpr_accepted')) {
+      setTimeout(() => { 
+          const banner = document.getElementById('gdprBanner');
+          if(banner) banner.style.display = 'block'; 
+      }, 1000);
+    }
+  }
+
+  function acceptGDPR() {
+    localStorage.setItem('gdpr_accepted', 'true');
+    const banner = document.getElementById('gdprBanner');
+    if(banner) banner.style.display = 'none';
+  }
+
+  function showLegalModal(e) {
+      if (e) e.preventDefault();      
+      const modalEl = document.getElementById('legalModal');
+      if (!modalEl) return;
+      const bodyEl = document.getElementById('legalModalBody');
+      const btn1 = document.getElementById('legalCloseBtn');
+      const btn2 = document.getElementById('legalCloseTop');
+      const prompt = document.getElementById('legalScrollPrompt');
+      
+      btn1.disabled = true; btn2.disabled = true;
+      btn1.className = "btn btn-secondary fw-bold";
+      prompt.style.display = "inline-block";
+      
+      const unlockModal = () => {
+          btn1.disabled = false; btn2.disabled = false;
+          prompt.style.display = "none";
+          btn1.classList.replace('btn-secondary', 'btn-primary');
+          btn1.innerText = "I Agree & Close";
+      };
+      
+      bodyEl.onscroll = function() {
+          if (bodyEl.scrollTop + bodyEl.clientHeight >= bodyEl.scrollHeight - 15) unlockModal();
+      };
+      setTimeout(() => {
+          if (bodyEl.scrollHeight <= bodyEl.clientHeight + 10) unlockModal();
+      }, 300);
+      
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
 </script>
 </body>
