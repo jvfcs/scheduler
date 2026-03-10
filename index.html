@@ -18,21 +18,36 @@
   <style id="white-label-styles"></style>
 
   <style>
-    body { background-color: #f8f9fa; font-family: sans-serif; margin:0; padding:0; padding-top: env(safe-area-inset-top); height: 100vh; width: 100%; overflow: hidden; }
+    /* RESTORED ORIGINAL CSS VARIABLES */
+    :root {
+        --brand-pop-blue: #007bff; --brand-dark-blue: #001f3f;
+        --brand-grey: #6c757d; --brand-accent-red: #dc3545;
+        --brand-accent-light: #17a2b8; --app-bg: #f8f9fa;
+        --card-bg: #ffffff; --text-main: #212529; --border-color: #dee2e6;
+    }
+    [data-bs-theme="dark"] {
+        --brand-pop-blue: #0d6efd;
+        --app-bg: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0;
+        --border-color: #333333; --brand-dark-blue: #000c1a;
+    }
+    [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
+    
+    body { background-color: var(--app-bg); color: var(--text-main); font-family: sans-serif; margin: 0; padding-top: env(safe-area-inset-top); overflow: hidden; }
+    
     .hidden { display: none !important; }
-    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #001f3f; color: white; z-index: 1070; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s ease-out; }
-    #loginOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #f8f9fa; z-index: 1060; display: flex; align-items: center; justify-content: center; }
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--brand-dark-blue); color: white; z-index: 1070; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s ease-out; }
+    #loginOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--app-bg); z-index: 1060; display: flex; align-items: center; justify-content: center; }
   </style>
 </head>
 <body>
 
 <div id="loginOverlay" class="hidden">
-  <div class="card p-4 shadow-sm text-center" style="max-width: 400px; width: 90%; background: #ffffff;">    
+  <div class="card p-4 shadow-sm text-center" style="max-width: 400px; width: 90%; background: var(--card-bg); border: 1px solid var(--border-color);">    
     <div id="loginContent">
       <div style="height: 250px; width: 250px; margin: 0 auto;" class="mb-3 d-flex justify-content-center align-items-center">
           <img id="loginLogo" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" style="max-width:100%; max-height:100%; object-fit:contain; opacity: 0; transition: opacity 0.5s;">
       </div>
-      <h3 id="loginTitle" class="fw-bold mb-3" style="color: #007bff;">Scheduler Login</h3> 
+      <h3 id="loginTitle" class="fw-bold mb-3" style="color: var(--brand-pop-blue);">Scheduler Login</h3> 
       <div id="loginMessageContainer" class="text-muted small mb-3 hidden" style="line-height: 1.4;"></div>
       <div id="googleSignInBtn" class="d-flex justify-content-center" style="min-height: 40px;">
           <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
@@ -47,8 +62,8 @@
   <h3 id="loading-text" class="text-white">Connecting to System...</h3>
 </div>
 
-<div id="accessDenied" class="container py-5 text-center hidden" style="position: absolute; z-index: 1080; background: #f8f9fa; width: 100vw; height: 100vh;">
-  <div class="card p-4 p-md-5 shadow-sm mx-auto mt-5 border-danger" style="max-width: 500px;">
+<div id="accessDenied" class="container py-5 text-center hidden" style="position: absolute; z-index: 1080; background: var(--app-bg); width: 100vw; height: 100vh;">
+  <div class="card p-4 p-md-5 shadow-sm mx-auto mt-5 border-danger" style="max-width: 500px; background: var(--card-bg);">
     <h2 class="text-danger fw-bold mb-3">Access Denied</h2>
     <p class="text-muted" id="accessDeniedMsg">You do not have permission to view the Scheduler.</p>
     <p id="deniedEmail" class="fw-bold mt-3 mb-4 text-secondary"></p>
@@ -161,7 +176,6 @@
       }
   };
 
-  // CRITICAL FIX: Expose ShellApp globally so the injected payload can read the queue!
   window.ShellApp = ShellApp;
 
   window.Auth = {
@@ -239,27 +253,33 @@
       if (!payloadRes.success) throw new Error(payloadRes.error || "Failed to download core logic from Mothership.");
       if (!dbRes.success) throw new Error(dbRes.error || "Access Denied: You are not an active staff member.");
 
-      // 2. Decrypt and Mount the UI
+      // 2. Decrypt Payload
       const decryptedHtml = ShellApp.decryptPayloadBytes(payloadRes.data, licenseKey);
       const temp = document.createElement('div');
       temp.innerHTML = decryptedHtml;
       
+      // 3. Mount Styles 
       const styles = temp.querySelectorAll('style');
-      styles.forEach(s => document.head.appendChild(s));
+      styles.forEach(s => document.head.appendChild(s.cloneNode(true)));
       
+      // 4. Mount HTML Safely
+      const appRoot = document.getElementById('app-root');
+      appRoot.innerHTML = '';
+      Array.from(temp.childNodes).forEach(node => {
+          if (node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
+              appRoot.appendChild(node.cloneNode(true));
+          }
+      });
+      
+      // 5. Execute Scripts Natively
       const scripts = temp.querySelectorAll('script');
-      scripts.forEach(s => s.remove());
-      
-      document.getElementById('app-root').innerHTML = temp.innerHTML;
-      
-      // 3. Inject the Frontend JS Engine
       scripts.forEach((script) => {
         const newScript = document.createElement('script');
-        newScript.text = script.text;
+        newScript.textContent = script.textContent; // Preserves complex logic formatting
         document.body.appendChild(newScript);
       });
 
-      // 4. Launch the Enterprise App with the fetched Database State
+      // 6. Launch the App!
       if (window.EnterpriseApp) {
           window.EnterpriseApp.launch(dbRes.data);
           
