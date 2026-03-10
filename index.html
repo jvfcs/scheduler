@@ -130,6 +130,10 @@
               if(lImg) { lImg.src = t.brand_logo_url; lImg.onload = () => lImg.style.opacity = '1'; }
               const ldImg = document.getElementById('loadLogo');
               if(ldImg) { ldImg.src = t.brand_logo_url; ldImg.style.display = 'block'; ldImg.style.opacity = '1'; }
+              
+              // CRITICAL FIX: Update the Navbar Logo
+              const navImg = document.getElementById('nav-brand-logo');
+              if(navImg) { navImg.src = t.brand_logo_url; navImg.style.display = 'block'; }
           }
 
           if (t.google_client_id) {
