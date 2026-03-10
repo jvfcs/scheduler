@@ -284,10 +284,14 @@
 
       // 6. Launch the App!
       if (window.EnterpriseApp) {
+          // Pass the database data to the core engine
           window.EnterpriseApp.launch(dbRes.data);
           
-          // CRITICAL FIX: Re-run branding on the freshly injected Navbar
-          ShellApp.applyWhiteLabel(ShellApp.templateData);
+          // Use a tiny delay to ensure the DOM has painted the injected Navbar
+          setTimeout(() => {
+              console.log("Applying branding to injected UI...");
+              ShellApp.applyWhiteLabel(ShellApp.templateData);
+          }, 50);
           
           document.getElementById('loadingOverlay').style.opacity = '0';
           setTimeout(() => document.getElementById('loadingOverlay').classList.add('hidden'), 400);
