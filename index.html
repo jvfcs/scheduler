@@ -239,12 +239,6 @@
       const savedUserEmail = localStorage.getItem('scheduler_user');
       
       if (savedToken && savedUserEmail) {
-          const data = window.Auth.parseJwt(savedToken);
-          const nowInSeconds = Math.floor(Date.now() / 1000);
-          if (data && data.exp && data.exp < nowInSeconds) {
-              window.Auth.signOut(true);
-              return;
-          }
           ShellApp.currentUserEmail = savedUserEmail;
           secureBoot();
       } else {
