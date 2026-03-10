@@ -18,7 +18,6 @@
   <style id="white-label-styles"></style>
 
   <style>
-    /* RESTORED ORIGINAL CSS VARIABLES */
     :root {
         --brand-pop-blue: #007bff; --brand-dark-blue: #001f3f;
         --brand-grey: #6c757d; --brand-accent-red: #dc3545;
@@ -33,7 +32,6 @@
     [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
     
     body { background-color: var(--app-bg); color: var(--text-main); font-family: sans-serif; margin: 0; padding-top: env(safe-area-inset-top); overflow: hidden; }
-    
     .hidden { display: none !important; }
     #loadingOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--brand-dark-blue); color: white; z-index: 1070; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s ease-out; }
     #loginOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--app-bg); z-index: 1060; display: flex; align-items: center; justify-content: center; }
@@ -211,7 +209,7 @@
       
       if (res.success && res.data) {
           ShellApp.templateData = res.data;
-          licenseKey = res.data.license_key;
+          licenseKey = res.data.license_key || res.data.licensekey;
           ShellApp.applyWhiteLabel(res.data);
       } else {
           document.getElementById('loadingOverlay').classList.add('hidden');
@@ -258,7 +256,7 @@
       const temp = document.createElement('div');
       temp.innerHTML = decryptedHtml;
       
-      // 3. Mount Styles 
+      // 3. Mount Styles (CRITICAL FIX FOR BROKEN CSS)
       const styles = temp.querySelectorAll('style');
       styles.forEach(s => document.head.appendChild(s.cloneNode(true)));
       
@@ -275,7 +273,7 @@
       const scripts = temp.querySelectorAll('script');
       scripts.forEach((script) => {
         const newScript = document.createElement('script');
-        newScript.textContent = script.textContent; // Preserves complex logic formatting
+        newScript.textContent = script.textContent; 
         document.body.appendChild(newScript);
       });
 
