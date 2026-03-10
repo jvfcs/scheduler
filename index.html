@@ -198,6 +198,10 @@
           ShellApp.currentUserEmail = email;
           localStorage.setItem('scheduler_token', response.credential);
           localStorage.setItem('scheduler_user', email);
+          
+          // Log the login time in the background automatically
+          ShellApp.apiCall('UPDATE_STAFF_FIELD', { email: email, field: 'lastLogin', value: new Date().toISOString() });
+          
           secureBoot();
       },
       signOut: (isExpired = false) => {
