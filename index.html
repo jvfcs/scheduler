@@ -177,6 +177,7 @@
           `;
       },
       decryptPayloadBytes: (base64Str, key) => {
+          if (!base64Str) throw new Error("Payload is empty or undefined.");
           const binaryStr = atob(base64Str);
           const keyBytes = new TextEncoder().encode(key);
           const decryptedBytes = new Uint8Array(binaryStr.length);
@@ -193,7 +194,12 @@
       parseJwt: (token) => {
           try {
               const base64Url = token.split('.')[1];
-              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+              let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+              const pad = base64.length % 4;
+              if (pad) {
+                  if (pad === 1) throw new Error('Invalid Base64');
+                  base64 += new Array(5 - pad).join('=');
+              }
               const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
               return JSON.parse(jsonPayload);
           } catch(e) { return null; }
@@ -254,15 +260,17 @@
     try {
       // 1. Fetch Encrypted UI AND the DB Data simultaneously
       const [payloadRes, dbRes] = await Promise.all([
-          ShellApp.apiCall('getSecureApp'),
+          ShellApp.apiCall('getPayload'), // Matches the exact route on the Mothership
           ShellApp.apiCall('SYNC_DATA')
       ]);
 
       if (!payloadRes.success) throw new Error(payloadRes.error || "Failed to download core logic from Mothership.");
       if (!dbRes.success) throw new Error(dbRes.error || "Access Denied: You are not an active staff member.");
 
-      // 2. Decrypt Payload
-      const decryptedHtml = ShellApp.decryptPayloadBytes(payloadRes.data, licenseKey);
+      // 2. Decrypt Payload (Safely grabs 'data' or 'payload' to prevent atob crashes)
+      const rawPayloadData = payloadRes.data || payloadRes.payload;
+      if (!rawPayloadData) throw new Error("Mothership returned an empty payload string.");
+      const decryptedHtml = ShellApp.decryptPayloadBytes(rawPayloadData, licenseKey);
       const temp = document.createElement('div');
       temp.innerHTML = decryptedHtml;
       
