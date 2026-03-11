@@ -215,7 +215,6 @@
       signOut: (isExpired = false) => {
           localStorage.removeItem('scheduler_user');
           localStorage.removeItem('scheduler_token');
-          if(isExpired) alert("Session expired. Please log in again.");
           window.location.reload(); 
       }
   };
