@@ -289,8 +289,8 @@
 
       // 6. Launch the App!
       if (window.EnterpriseApp) {
-          // Pass the database data to the core engine
-          window.EnterpriseApp.launch(dbRes.data);
+          // Pass the database data and mothership config to the core engine
+          window.EnterpriseApp.launch(dbRes.data, payloadRes.config || {});
           
           // Use a tiny delay to ensure the DOM has painted the injected Navbar
           setTimeout(() => {
